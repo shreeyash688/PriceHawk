@@ -364,6 +364,7 @@ generated exports.
 Keep `README.md` for setup and usage instructions. Keep this
 `context.md` as the detailed project specification and shared
 reference for future development sessions.
+Update`change-log.md`with your latest changes and updates to the directry with your name and date.
 14. Project Success Criteria
 The project is successful when: 1. The extension loads in Chrome
 Developer Mode. 2. A user can track a supported product using automatic
