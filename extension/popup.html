@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriceHawk</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+    <main class="app-container">
+
+        <!-- Header -->
+        <header class="header">
+            <div class="brand">
+                <div class="brand-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"/>
+                        <circle cx="7.5" cy="7.5" r="1.2" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>PriceHawk</h1>
+                    <p>Track prices. Catch deals.</p>
+                </div>
+            </div>
+
+            <span class="badge" id="status-badge" title="Extension ready">
+                <span class="status-dot"></span>
+                <span id="status-text">Ready</span>
+            </span>
+        </header>
+
+        <!-- Product -->
+        <section class="product-info">
+            <div class="product-image" aria-hidden="true"></div>
+
+            <div class="product-details">
+                <h2 id="product-title">A Light in the Attic</h2>
+                <div class="product-meta">
+                    <p id="product-domain">books.toscrape.com</p>
+                    <span class="badge badge-secondary">Demo</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Shelf label -->
+        <section class="price-label" aria-label="Current price">
+            <div class="label-top">
+                <span>Price now</span>
+                <span class="price-status">
+                    <span class="price-indicator"></span>
+                    Price detected
+                </span>
+            </div>
+
+            <!-- JS: PriceHawkUI.setPrice("£51.77") keeps the raised-pence styling -->
+            <p class="price" id="current-price">
+                <span class="price-currency">£</span><span class="price-whole">51</span><sup class="price-pence">77</sup>
+            </p>
+
+            <div class="gap-meter">
+                <div class="gap-track"><div class="gap-fill" id="gap-fill"></div></div>
+                <p class="gap-text" id="gap-text">Set a target to see how far away it is.</p>
+            </div>
+        </section>
+
+        <!-- Target -->
+        <section class="target-section">
+            <div class="field-group">
+
+                <div class="field">
+                    <label for="target-price">Your target price</label>
+                    <div class="input-container">
+                        <span class="currency-symbol">£</span>
+                        <input type="number" id="target-price" min="0.01" step="0.01" placeholder="e.g. 40.00">
+                    </div>
+                    <div class="toggle-group" role="group" aria-label="Quick targets">
+                        <button type="button" class="toggle-item" data-discount="10" aria-pressed="false">10% off</button>
+                        <button type="button" class="toggle-item" data-discount="20" aria-pressed="false">20% off</button>
+                        <button type="button" class="toggle-item" data-discount="30" aria-pressed="false">30% off</button>
+                        <button type="button" class="toggle-item" data-discount="50" aria-pressed="false">50% off</button>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="email">Send the alert to</label>
+                    <div class="input-container">
+                        <span class="currency-symbol" aria-hidden="true">
+                            <svg data-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+                        </span>
+                        <input type="email" id="email" autocomplete="email" placeholder="you@example.com">
+                    </div>
+                    <p class="helper-text">One email when the price reaches your target.</p>
+                </div>
+
+            </div>
+
+            <button id="track-button" type="button">
+                <svg data-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+                <span>Start tracking</span>
+            </button>
+
+            <p id="message" class="message" role="status" aria-live="polite"></p>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-stat">
+                <svg data-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                <span>Checked automatically</span>
+            </div>
+
+            <button id="view-tracked" class="text-button" type="button">
+                My products
+                <span class="badge badge-secondary" id="tracked-count">0/5</span>
+            </button>
+        </footer>
+
+    </main>
+
+    <script src="popup-ui.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

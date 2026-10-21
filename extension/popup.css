@@ -1,0 +1,263 @@
+/* PriceHawk popup
+   Idea: the price lives on a yellow shop shelf label; everything else stays quiet.
+   Tokens follow shadcn naming (background, foreground, primary, muted, border...). */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --background: #fbf9f5;
+    --foreground: #231c17;
+    --card: #ffffff;
+    --primary: #231c17;
+    --primary-foreground: #fbf6ea;
+    --primary-hover: #3b3028;
+    --secondary: #f1ebe2;
+    --secondary-foreground: #3b3027;
+    --muted-foreground: #766a5e;
+    --accent: #ffd84d;               /* shelf-label yellow */
+    --accent-foreground: #231c17;
+    --destructive: #d3361e;          /* tomato */
+    --success: #2c7a3f;
+    --border: #e6dfd4;
+    --input: #d9cfc0;
+    --ring: rgba(255, 216, 77, 0.6);
+    --radius: 8px;
+
+    --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-price: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+    width: 360px;
+    min-height: 500px;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+button, input { font: inherit; color: inherit; }
+
+[data-icon] { width: 16px; height: 16px; flex-shrink: 0; }
+
+:focus-visible { outline: 2px solid var(--foreground); outline-offset: 2px; }
+
+.app-container { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- Header ---------- */
+
+.header { display: flex; align-items: center; justify-content: space-between; }
+
+.brand { display: flex; align-items: center; gap: 10px; }
+
+.brand-icon {
+    width: 36px; height: 36px;
+    display: grid; place-items: center;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: var(--accent);
+}
+.brand-icon svg { width: 20px; height: 20px; }
+
+.brand h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.15; }
+.brand p  { color: var(--muted-foreground); font-size: 11.5px; }
+
+.badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    font-size: 11.5px; font-weight: 500;
+}
+.badge-secondary { background: var(--secondary); border-color: transparent; color: var(--secondary-foreground); }
+
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+
+/* ---------- Product ---------- */
+
+.product-info { display: flex; align-items: center; gap: 12px; }
+
+/* tiny book cover; JS can put an <img> inside to replace it */
+.product-image {
+    position: relative;
+    width: 44px; height: 60px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 3px 6px 6px 3px;
+    background: var(--destructive);
+    box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.18);
+}
+.product-image::after {
+    content: "";
+    position: absolute; left: 10px; right: 6px; top: 14px; height: 6px;
+    background: var(--accent);
+}
+.product-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+.product-details { min-width: 0; }
+.product-details h2 {
+    font-size: 14.5px; font-weight: 600; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.product-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.product-meta p { color: var(--muted-foreground); font-size: 11.5px; overflow-wrap: anywhere; }
+
+/* ---------- Shelf label (the memorable bit) ---------- */
+
+.price-label {
+    padding: 12px 16px 14px;
+    border: 1.5px solid var(--foreground);
+    border-radius: 12px;
+    background: var(--accent);
+    color: var(--accent-foreground);
+    transform: rotate(-1deg);
+    animation: stick 0.4s cubic-bezier(.3, 1.4, .5, 1) both;
+}
+
+@keyframes stick {
+    from { transform: rotate(-4deg) scale(1.07); opacity: 0; }
+    to   { transform: rotate(-1deg) scale(1);    opacity: 1; }
+}
+
+.label-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; }
+.label-top .price-status { display: flex; align-items: center; gap: 6px; font-weight: 500; opacity: 0.8; }
+.price-indicator { width: 7px; height: 7px; border-radius: 50%; background: var(--foreground); }
+
+.price {
+    display: flex; align-items: flex-start; gap: 2px;
+    margin: 4px 0 10px;
+    font-family: var(--font-price);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -2px;
+    font-size: 64px;           /* if JS replaces the text, it still looks right */
+    font-variant-numeric: tabular-nums;
+}
+.price-currency { margin-top: 6px; font-size: 30px; letter-spacing: 0; }
+.price-pence    { margin-top: 6px; font-size: 30px; letter-spacing: -1px; }
+
+.gap-meter { padding-top: 11px; border-top: 1.5px dashed rgba(35, 28, 23, 0.45); }
+.gap-track { height: 8px; border-radius: 999px; background: rgba(35, 28, 23, 0.16); overflow: hidden; }
+.gap-fill  { width: var(--progress, 0%); height: 100%; border-radius: inherit; background: var(--foreground); transition: width 0.35s ease; }
+.gap-text  { margin-top: 8px; font-size: 12px; font-weight: 600; }
+
+/* ---------- Form ---------- */
+
+.target-section { display: flex; flex-direction: column; gap: 16px; }
+.field-group    { display: flex; flex-direction: column; gap: 14px; }
+.field          { display: flex; flex-direction: column; gap: 6px; }
+.field > label  { font-size: 12.5px; font-weight: 600; }
+
+.input-container {
+    display: flex; align-items: stretch;
+    border: 1px solid var(--input);
+    border-radius: var(--radius);
+    background: var(--card);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-container:focus-within { border-color: var(--foreground); box-shadow: 0 0 0 3px var(--ring); }
+.input-container:has([aria-invalid="true"]) { border-color: var(--destructive); }
+
+.currency-symbol {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 36px; padding: 0 10px;
+    border-right: 1px solid var(--input);
+    border-radius: var(--radius) 0 0 var(--radius);
+    background: var(--secondary);
+    color: var(--muted-foreground);
+    font-weight: 600;
+}
+
+.input-container input {
+    width: 100%; height: 38px; padding: 0 12px;
+    border: none; outline: none; background: transparent;
+}
+.input-container input::placeholder { color: #a39686; }
+
+.helper-text { color: var(--muted-foreground); font-size: 11.5px; }
+
+/* Joined option buttons (ToggleGroup) */
+.toggle-group { display: flex; }
+.toggle-item {
+    flex: 1; height: 32px;
+    border: 1px solid var(--input);
+    margin-left: -1px;
+    background: var(--card);
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.toggle-item:first-child { margin-left: 0; border-radius: var(--radius) 0 0 var(--radius); }
+.toggle-item:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+.toggle-item:hover { background: var(--secondary); }
+.toggle-item[aria-pressed="true"] { background: var(--accent); border-color: var(--foreground); position: relative; z-index: 1; font-weight: 700; }
+
+/* Primary button */
+#track-button {
+    width: 100%; height: 42px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border: none; border-radius: var(--radius);
+    background: var(--primary); color: var(--primary-foreground);
+    font-size: 13.5px; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+#track-button:hover    { background: var(--primary-hover); }
+#track-button:active   { transform: translateY(1px); }
+#track-button:disabled { opacity: 0.65; cursor: wait; transform: none; }
+
+.spinner {
+    width: 16px; height: 16px;
+    border: 2px solid currentColor; border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Alert-style message */
+.message {
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    font-size: 12px; line-height: 1.45;
+}
+.message:empty { display: none; }
+.message.success { border-color: rgba(44, 122, 63, 0.35); color: var(--success); }
+.message.error   { border-color: rgba(211, 54, 30, 0.4);  color: var(--destructive); }
+.message::before {
+    content: ""; width: 14px; height: 14px; margin-top: 2px; flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask: var(--msg-icon) center / contain no-repeat;
+            mask: var(--msg-icon) center / contain no-repeat;
+}
+.message.success { --msg-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); }
+.message.error   { --msg-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 8v5M12 16.5v.01'/%3E%3C/svg%3E"); }
+
+/* ---------- Footer ---------- */
+
+.footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+.footer-stat { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 11.5px; }
+
+.text-button {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 30px; padding: 0 8px 0 10px;
+    border: none; border-radius: var(--radius);
+    background: transparent;
+    font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+}
+.text-button:hover { background: var(--secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+    .price-label { animation: none; }
+    .spinner { animation-duration: 2s; }
+    .gap-fill, .input-container, .toggle-item, #track-button { transition: none; }
+}
