@@ -33,8 +33,8 @@ SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-EMAIL_TO = os.getenv("ALERT_EMAIL_TO", "") or SMTP_USER
 
 # --- Safety / demo ---
+MAX_PRODUCTS_PER_EMAIL = int(os.getenv("MAX_PRODUCTS_PER_EMAIL", "5"))  # stops one address being flooded
 DEMO_MODE = _get_bool("DEMO_MODE", False)
 EXTENSION_ID = os.getenv("EXTENSION_ID", "")

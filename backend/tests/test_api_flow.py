@@ -21,8 +21,8 @@ class ApiFlowTests(DatabaseTestCase):
         for p in (scraper_patch, email_patch, demo_patch):
             self.addCleanup(p.stop)
 
-    def track(self, url=BOOK_URL, target=15):
-        return self.client.post("/api/products", json={"url": url, "target_price": target})
+    def track(self, url=BOOK_URL, target=15, email="a@x.com"):
+        return self.client.post("/api/products", json={"url": url, "target_price": target, "email": email})
 
     # ----- tracking + validation -----
     def test_track_and_list(self):
@@ -30,7 +30,7 @@ class ApiFlowTests(DatabaseTestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()["current_price"], 20.0)
         self.track(BOOK_URL_2, 10)
-        products = self.client.get("/api/products").get_json()["products"]
+        products = self.client.get("/api/products?email=a@x.com").get_json()["products"]
         self.assertEqual(len(products), 2)
 
     def test_duplicate_is_409(self):
@@ -41,6 +41,51 @@ class ApiFlowTests(DatabaseTestCase):
         for bad in (-5, 0, "abc", None, True, float("nan")):
             with self.subTest(target=bad):
                 self.assertEqual(self.track(target=bad).status_code, 400)
+
+    # ----- multiple people (one email per product) -----
+    def test_same_book_for_different_people(self):
+        self.assertEqual(self.track(email="a@x.com").status_code, 201)
+        self.assertEqual(self.track(email="b@x.com").status_code, 201)
+        mine = self.client.get("/api/products?email=a@x.com").get_json()["products"]
+        theirs = self.client.get("/api/products?email=b@x.com").get_json()["products"]
+        self.assertEqual([p["notify_email"] for p in mine], ["a@x.com"])
+        self.assertEqual([p["notify_email"] for p in theirs], ["b@x.com"])
+
+    def test_email_is_cleaned_up(self):
+        product = self.track(email="  Person@Example.COM ").get_json()
+        self.assertEqual(product["notify_email"], "person@example.com")
+
+    def test_invalid_emails_are_400(self):
+        bad_emails = ["", None, "abc", "a@b", "a b@x.com", "a,b@x.com", "a@x.com,evil@y.com",
+                      "a@x.com\nBcc: evil@y.com", 123, "@x.com", "a@.com"]
+        for bad in bad_emails:
+            with self.subTest(email=bad):
+                self.assertEqual(self.track(email=bad).status_code, 400)
+
+    def test_list_and_exports_need_an_email(self):
+        self.assertEqual(self.client.get("/api/products").status_code, 400)
+        self.assertEqual(self.client.get("/api/export/products.csv").status_code, 400)
+        self.assertEqual(self.client.get("/api/export/history.csv").status_code, 400)
+
+    def test_limit_per_email(self):
+        with patch.object(config, "MAX_PRODUCTS_PER_EMAIL", 1):
+            self.assertEqual(self.track(BOOK_URL, email="a@x.com").status_code, 201)
+            self.assertEqual(self.track(BOOK_URL_2, email="a@x.com").status_code, 400)
+            self.assertEqual(self.track(BOOK_URL_2, email="b@x.com").status_code, 201)
+
+    def test_alert_goes_to_the_owner_of_the_product(self):
+        self.track(target=25, email="a@x.com")  # price 20 <= 25 -> alert
+        self.track(target=10, email="b@x.com")  # 20 > 10 -> no alert
+        self.assertEqual(self.send_email.call_count, 1)
+        alerted_product = self.send_email.call_args[0][0]
+        self.assertEqual(alerted_product.notify_email, "a@x.com")
+
+    def test_preview_says_if_email_already_tracks_it(self):
+        self.track(email="a@x.com")
+        body = lambda email: {"url": BOOK_URL, "email": email}
+        self.assertTrue(self.client.post("/api/preview", json=body("a@x.com")).get_json()["already_tracked"])
+        self.assertFalse(self.client.post("/api/preview", json=body("b@x.com")).get_json()["already_tracked"])
+        self.assertFalse(self.client.post("/api/preview", json={"url": BOOK_URL}).get_json()["already_tracked"])
 
     def test_bad_body_is_400(self):
         response = self.client.post("/api/products", data="not json", content_type="text/plain")
@@ -131,15 +176,18 @@ class ApiFlowTests(DatabaseTestCase):
 
     # ----- CSV + CORS -----
     def test_csv_export_with_and_without_data(self):
-        empty = self.client.get("/api/export/products.csv").get_data(as_text=True)
+        empty = self.client.get("/api/export/products.csv?email=a@x.com").get_data(as_text=True)
         self.assertEqual(len(empty.strip().splitlines()), 1)  # header only
 
         product_id = self.track().get_json()["id"]
-        products_csv = self.client.get("/api/export/products.csv").get_data(as_text=True)
-        history_csv = self.client.get(f"/api/export/history.csv?product_id={product_id}").get_data(as_text=True)
+        products_csv = self.client.get("/api/export/products.csv?email=a@x.com").get_data(as_text=True)
+        history_csv = self.client.get(
+            f"/api/export/history.csv?email=a@x.com&product_id={product_id}").get_data(as_text=True)
+        other_persons_csv = self.client.get("/api/export/products.csv?email=b@x.com").get_data(as_text=True)
+        self.assertEqual(len(other_persons_csv.strip().splitlines()), 1)  # header only: not their products
         self.assertEqual(len(products_csv.strip().splitlines()), 2)
         self.assertEqual(len(history_csv.strip().splitlines()), 2)
-        self.assertEqual(self.client.get("/api/export/history.csv?product_id=999").status_code, 404)
+        self.assertEqual(self.client.get("/api/export/history.csv?email=a@x.com&product_id=999").status_code, 404)
 
     def test_cors_only_for_extensions(self):
         extension = self.client.get("/api/health", headers={"Origin": "chrome-extension://abc"})

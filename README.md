@@ -17,6 +17,9 @@ python app.py                  # API runs at http://127.0.0.1:5000
 Run the tests (no internet or email needed): `cd backend && python -m unittest -v`
 
 **Gmail:** turn on 2-Step Verification, create an *App Password*, and put it in `SMTP_PASSWORD` in `.env`.
+That account is only the **sender**. Each person types their **own email** in the extension, and alerts go there.
+
+**Upgrading from an older version?** The database layout changed (emails per product). Delete `backend/pricehawk.db` once and restart.
 
 ## Folder map (backend/)
 | File | Job |
@@ -40,16 +43,16 @@ All responses are JSON. Errors look like `{"error": "message"}` with status 400 
 | Method + URL | Body | What it does |
 |---|---|---|
 | `GET /api/health` | | Is the backend running? |
-| `POST /api/preview` | `{"url"}` | Get title + price **without** saving (for the popup) |
-| `POST /api/products` | `{"url", "target_price"}` | Start tracking (201) |
-| `GET /api/products?sort=newest\|deals` | | List products (`deals` = closest to target first) |
+| `POST /api/preview` | `{"url", "email"?}` | Get title + price **without** saving (with `email`, also says `already_tracked`) |
+| `POST /api/products` | `{"url", "target_price", "email"}` | Start tracking (201). Alerts go to `email` |
+| `GET /api/products?email=&sort=newest\|deals` | | List **that email's** products (`deals` = closest to target first) |
 | `GET /api/products/<id>` | | One product |
 | `PUT /api/products/<id>` | `{"target_price"?, "tracking_active"?}` | Change target / pause / resume |
 | `DELETE /api/products/<id>` | | Stop tracking and delete |
 | `POST /api/products/<id>/check` | | "Check now" |
 | `GET /api/products/<id>/history` | | Price history |
-| `GET /api/export/products.csv` | | CSV of products |
-| `GET /api/export/history.csv?product_id=` | | CSV of history (all, or one product) |
+| `GET /api/export/products.csv?email=` | | CSV of that email's products |
+| `GET /api/export/history.csv?email=&product_id=` | | CSV of that email's history (optionally one product) |
 | `POST /api/products/<id>/simulate` | `{"price"}` | **Demo mode only**: fake a price |
 
 **For whoever builds the extension:** add `"host_permissions": ["http://127.0.0.1:5000/*"]` to `manifest.json`,
@@ -58,11 +61,21 @@ To lock the API to your extension only, put its ID (from `chrome://extensions`) 
 
 ## Demo (without waiting for a real price change)
 1. In `.env`: `DEMO_MODE=true`, then start the server.
-2. Track a book with a target of £40 (the real price is £51.77, so no email yet).
+2. Track a book with a target of £40 and **your own email** (the real price is £51.77, so no email yet).
 3. `curl -X POST http://127.0.0.1:5000/api/products/1/simulate -H "Content-Type: application/json" -d "{\"price\": 30}"`
 4. You get **one** email. Repeat step 3 and no second email is sent (that is the spam protection).
 
 Note: the background monitor will later overwrite the fake price with the real one. That is expected.
+
+## Multiple people
+Each tracked product stores the email of the person who added it (`notify_email`).
+- The same book can be tracked by different people; the same person can't track it twice (`UNIQUE (url, notify_email)`).
+- The alert for a product is emailed to **that product's** `notify_email` only.
+- Lists and CSV exports are filtered by email, so people don't see each other's products.
+- One email can track at most `MAX_PRODUCTS_PER_EMAIL` products (default 5), so nobody can flood an address.
+
+**Known limits (fine for a mini-project):** an email is an *address*, not a *login*. Nobody verifies that you own it,
+so someone who knows an email and a product id could view or change that product. Real accounts (register/login) would fix this.
 
 ## How alerts work
 `price <= target` and no alert sent yet → send one email, set `alert_sent = 1`.

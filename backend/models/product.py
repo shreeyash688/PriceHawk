@@ -3,7 +3,8 @@
 
 class Product:
     def __init__(self, id, title, url, current_price, target_price,
-                 tracking_active, alert_sent, created_at, last_checked_at, last_error):
+                 tracking_active, alert_sent, created_at, last_checked_at, last_error,
+                 notify_email):
         self.id = id
         self.title = title
         self.url = url
@@ -14,6 +15,7 @@ class Product:
         self.created_at = created_at
         self.last_checked_at = last_checked_at
         self.last_error = last_error
+        self.notify_email = notify_email  # who receives the alert
 
     @classmethod
     def from_row(cls, row):
@@ -31,6 +33,7 @@ class Product:
             "id": self.id,
             "title": self.title,
             "url": self.url,
+            "notify_email": self.notify_email,
             "current_price": self.current_price,
             "target_price": self.target_price,
             "price_gap": self.price_gap,

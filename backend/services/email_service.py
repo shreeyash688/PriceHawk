@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def is_configured():
-    return all([config.SMTP_HOST, config.SMTP_USER, config.SMTP_PASSWORD, config.EMAIL_TO])
+    return all([config.SMTP_HOST, config.SMTP_USER, config.SMTP_PASSWORD])
 
 
 def send_price_alert(product):
@@ -25,7 +25,7 @@ def send_price_alert(product):
     message = EmailMessage()
     message["Subject"] = f"PriceHawk: target reached for {clean_title}"
     message["From"] = config.SMTP_USER
-    message["To"] = config.EMAIL_TO
+    message["To"] = product.notify_email  # each product has its own recipient
     message.set_content(
         "Good news! A product you are tracking reached your target price.\n\n"
         f"Product:       {clean_title}\n"

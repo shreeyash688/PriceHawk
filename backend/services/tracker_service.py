@@ -8,6 +8,7 @@ Rules for sending alerts (so the user is never spammed):
 """
 import logging
 import math
+import re
 import threading
 
 import config
@@ -43,6 +44,21 @@ class PriceChecker:
 
 # ---------- validation ----------
 
+# letters/digits/._%+- before the @, then a domain with a dot. No spaces, commas or quotes,
+# which also makes it impossible to sneak extra recipients or headers into an email.
+EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+
+
+def validate_email(value):
+    """Return the email trimmed and lower-cased, or raise ValidationError."""
+    if not isinstance(value, str):
+        raise ValidationError("Please enter a valid email address")
+    email = value.strip().lower()
+    if len(email) > 254 or not EMAIL_PATTERN.match(email):
+        raise ValidationError("Please enter a valid email address")
+    return email
+
+
 def _validate_price(value, field_name):
     """Accept a positive, finite number (or numeric text like "12.5"). Return it rounded to 2 decimals."""
     if value is None or isinstance(value, bool):
@@ -76,21 +92,30 @@ def _record_price(product_id, price):
 
 # ---------- actions used by the API ----------
 
-def preview_product(url):
-    """Look up a product WITHOUT saving it (used by the popup to show title and price)."""
+def preview_product(url, email=None):
+    """Look up a product WITHOUT saving it (used by the popup to show title and price).
+    If an email is given, also says whether that email is already tracking it."""
     data = get_scraper(url).scrape(url)
-    data["already_tracked"] = db.get_product_by_url(data["url"]) is not None
+    data["already_tracked"] = False
+    if email is not None:
+        email = validate_email(email)
+        data["already_tracked"] = db.get_product_by_url_and_email(data["url"], email) is not None
     return data
 
 
-def track_product(url, target_price):
+def track_product(url, target_price, email):
     target = _validate_price(target_price, "target_price")
+    email = validate_email(email)
+    if db.count_products_for_email(email) >= config.MAX_PRODUCTS_PER_EMAIL:
+        raise ValidationError(
+            f"This email is already tracking {config.MAX_PRODUCTS_PER_EMAIL} products (the maximum)"
+        )
+
     data = get_scraper(url).scrape(url)
+    if db.get_product_by_url_and_email(data["url"], email) is not None:
+        raise DuplicateProductError("This email is already tracking this product")
 
-    if db.get_product_by_url(data["url"]) is not None:
-        raise DuplicateProductError("You are already tracking this product")
-
-    product_id = db.add_product(data["title"], data["url"], data["price"], target)
+    product_id = db.add_product(data["title"], data["url"], data["price"], target, email)
     logger.info("Now tracking product %s (%s)", product_id, data["title"])
     return _record_price(product_id, data["price"])  # first history entry + instant alert if already cheap
 
@@ -99,9 +124,11 @@ def get_product(product_id):
     return Product.from_row(db.get_product(product_id))
 
 
-def list_products(sort="newest"):
+def list_products(email, sort="newest"):
+    """Only the products that belong to this email (people never see each other's lists)."""
+    email = validate_email(email)
     # map() turns every database row into a Product object.
-    products = list(map(Product.from_row, db.get_all_products()))
+    products = list(map(Product.from_row, db.get_all_products(email)))
     if sort == "deals":
         # lambda = tiny one-use function: closest to (or already below) target comes first
         products.sort(key=lambda product: product.price_gap)

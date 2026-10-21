@@ -88,21 +88,24 @@ def health():
 @handle_errors
 def preview():
     """Look up a product's title and price without saving it."""
-    return jsonify(tracker_service.preview_product(get_url_from_body(get_json_body())))
+    body = get_json_body()
+    return jsonify(tracker_service.preview_product(get_url_from_body(body), body.get("email")))
 
 
 @app.route("/api/products", methods=["POST"])
 @handle_errors
 def add_product():
     body = get_json_body()
-    product = tracker_service.track_product(get_url_from_body(body), body.get("target_price"))
+    product = tracker_service.track_product(
+        get_url_from_body(body), body.get("target_price"), body.get("email")
+    )
     return jsonify(product.to_dict()), 201
 
 
 @app.route("/api/products", methods=["GET"])
 @handle_errors
 def list_products():
-    products = tracker_service.list_products(request.args.get("sort", "newest"))
+    products = tracker_service.list_products(request.args.get("email"), request.args.get("sort", "newest"))
     return jsonify({"products": [product.to_dict() for product in products]})
 
 
@@ -148,16 +151,18 @@ def simulate(product_id):
 @app.route("/api/export/products.csv")
 @handle_errors
 def export_products():
-    return csv_response(export_service.products_csv(), "pricehawk_products.csv")
+    email = tracker_service.validate_email(request.args.get("email"))
+    return csv_response(export_service.products_csv(email), "pricehawk_products.csv")
 
 
 @app.route("/api/export/history.csv")
 @handle_errors
 def export_history():
+    email = tracker_service.validate_email(request.args.get("email"))
     product_id = request.args.get("product_id", type=int)
     if product_id is not None:
         tracker_service.get_product(product_id)  # 404 now, instead of an empty file
-    return csv_response(export_service.history_csv(product_id), "pricehawk_history.csv")
+    return csv_response(export_service.history_csv(email, product_id), "pricehawk_history.csv")
 
 
 # ---------- start-up ----------

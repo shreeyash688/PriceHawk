@@ -41,23 +41,29 @@ def init_db():
     with open(SCHEMA_FILE, "r", encoding="utf-8") as schema_file:
         schema = schema_file.read()
     with get_connection() as conn:
+        columns = [row["name"] for row in conn.execute("PRAGMA table_info(products)")]
+        if columns and "notify_email" not in columns:  # table exists but is the old version
+            raise RuntimeError(
+                "Your database file is from an older version of PriceHawk. "
+                "Delete backend/pricehawk.db and start the app again."
+            )
         conn.executescript(schema)
 
 
 # ---------- products: Create ----------
 
-def add_product(title, url, price, target_price):
+def add_product(title, url, price, target_price, notify_email):
     try:
         with get_connection() as conn:
             cursor = conn.execute(
-                "INSERT INTO products (title, url, current_price, target_price, created_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (title, url, price, target_price, now_iso()),
+                "INSERT INTO products (title, url, notify_email, current_price, target_price, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (title, url, notify_email, price, target_price, now_iso()),
             )
             return cursor.lastrowid
     except sqlite3.IntegrityError as error:
         if "UNIQUE" in str(error):
-            raise DuplicateProductError("You are already tracking this product")
+            raise DuplicateProductError("This email is already tracking this product")
         raise
 
 
@@ -71,15 +77,29 @@ def get_product(product_id):
     return row
 
 
-def get_product_by_url(url):
-    """Returns the row, or None if we are not tracking this URL."""
+def get_product_by_url_and_email(url, email):
+    """Returns the row, or None if this email is not tracking this URL."""
     with get_connection() as conn:
-        return conn.execute("SELECT * FROM products WHERE url = ?", (url,)).fetchone()
+        return conn.execute(
+            "SELECT * FROM products WHERE url = ? AND notify_email = ?", (url, email)
+        ).fetchone()
 
 
-def get_all_products():
+def get_all_products(email=None):
+    """All products, or only one person's products when an email is given."""
+    sql, params = "SELECT * FROM products", ()
+    if email is not None:
+        sql += " WHERE notify_email = ?"
+        params = (email,)
     with get_connection() as conn:
-        return conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
+        return conn.execute(sql + " ORDER BY id DESC", params).fetchall()
+
+
+def count_products_for_email(email):
+    with get_connection() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM products WHERE notify_email = ?", (email,)
+        ).fetchone()[0]
 
 
 # ---------- products: Update ----------
@@ -154,7 +174,7 @@ def get_price_history(product_id):
         ).fetchall()
 
 
-def iter_price_history(product_id=None, batch_size=100):
+def iter_price_history(product_id=None, email=None, batch_size=100):
     """GENERATOR: yields history rows a few at a time instead of loading them all.
 
     Used by the CSV export so even a huge history uses very little memory.
@@ -163,10 +183,15 @@ def iter_price_history(product_id=None, batch_size=100):
         "SELECT h.id, h.product_id, p.title, h.price, h.checked_at "
         "FROM price_history h JOIN products p ON p.id = h.product_id"
     )
-    params = ()
+    conditions, params = [], []
     if product_id is not None:
-        sql += " WHERE h.product_id = ?"
-        params = (product_id,)
+        conditions.append("h.product_id = ?")
+        params.append(product_id)
+    if email is not None:
+        conditions.append("p.notify_email = ?")
+        params.append(email)
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
     sql += " ORDER BY h.id"
 
     with get_connection() as conn:

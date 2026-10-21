@@ -8,7 +8,7 @@ import io
 
 from database import db
 
-PRODUCT_COLUMNS = ["id", "title", "url", "current_price", "target_price",
+PRODUCT_COLUMNS = ["id", "title", "url", "notify_email", "current_price", "target_price",
                    "tracking_active", "created_at", "last_checked_at"]
 HISTORY_COLUMNS = ["id", "product_id", "title", "price", "checked_at"]
 
@@ -25,13 +25,13 @@ def _csv_line(values):
     return buffer.getvalue()
 
 
-def products_csv():
+def products_csv(email):
     yield _csv_line(PRODUCT_COLUMNS)  # header row (so an empty export is still valid)
-    for row in db.get_all_products():
+    for row in db.get_all_products(email):
         yield _csv_line([row[column] for column in PRODUCT_COLUMNS])
 
 
-def history_csv(product_id=None):
+def history_csv(email, product_id=None):
     yield _csv_line(HISTORY_COLUMNS)
-    for row in db.iter_price_history(product_id):
+    for row in db.iter_price_history(product_id, email):
         yield _csv_line(list(row))
