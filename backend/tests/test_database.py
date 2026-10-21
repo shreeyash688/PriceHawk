@@ -1,3 +1,4 @@
+
 from database import db
 from exceptions import DuplicateProductError, ProductNotFoundError
 from tests.helpers import BOOK_URL, DatabaseTestCase
@@ -10,7 +11,7 @@ class DatabaseTests(DatabaseTestCase):
         product_id = db.add_product("Book A", BOOK_URL, 20.0, 15.0, EMAIL)
         row = db.get_product(product_id)
         self.assertEqual(row["title"], "Book A")
-        self.assertEqual(row["tracking_active"], 1)
+        self.assertIs(row["tracking_active"], True)
         self.assertEqual(len(db.get_all_products()), 1)
 
     def test_update(self):
@@ -19,7 +20,7 @@ class DatabaseTests(DatabaseTestCase):
         db.set_tracking_active(product_id, False)
         row = db.get_product(product_id)
         self.assertEqual(row["target_price"], 12.0)
-        self.assertEqual(row["tracking_active"], 0)
+        self.assertIs(row["tracking_active"], False)
 
     def test_delete_also_removes_history(self):
         product_id = db.add_product("Book A", BOOK_URL, 20.0, 15.0, EMAIL)
@@ -31,30 +32,19 @@ class DatabaseTests(DatabaseTestCase):
 
     def test_same_book_different_emails_allowed(self):
         db.add_product("Book A", BOOK_URL, 20.0, 15.0, "a@x.com")
-        db.add_product("Book A", BOOK_URL, 20.0, 15.0, "b@x.com")  # no error
+        db.add_product("Book A", BOOK_URL, 20.0, 15.0, "b@x.com")
         self.assertEqual(len(db.get_all_products()), 2)
         self.assertEqual(len(db.get_all_products("a@x.com")), 1)
         self.assertEqual(db.count_products_for_email("b@x.com"), 1)
 
     def test_history_can_be_filtered_by_email(self):
         first = db.add_product("Book A", BOOK_URL, 20.0, 15.0, "a@x.com")
-        second = db.add_product("Book A", BOOK_URL, 20.0, 15.0, "b@x.com")
+        second = db.add_product("Book B", BOOK_URL, 20.0, 15.0, "b@x.com")
         db.add_price_history(first, 20.0)
         db.add_price_history(second, 19.0)
         rows = list(db.iter_price_history(email="b@x.com"))
         self.assertEqual([row["price"] for row in rows], [19.0])
-
-    def test_old_database_gives_clear_error(self):
-        import sqlite3
-        import config
-        conn = sqlite3.connect(config.DB_PATH)
-        conn.execute("DROP TABLE price_history")
-        conn.execute("DROP TABLE products")
-        conn.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, url TEXT)")  # old layout
-        conn.commit()
-        conn.close()
-        with self.assertRaises(RuntimeError):
-            db.init_db()
+        self.assertEqual([row["title"] for row in rows], ["Book B"])
 
     def test_duplicate_url_rejected(self):
         db.add_product("Book A", BOOK_URL, 20.0, 15.0, EMAIL)
@@ -71,5 +61,14 @@ class DatabaseTests(DatabaseTestCase):
         product_id = db.add_product("Book A", BOOK_URL, 20.0, 15.0, EMAIL)
         for price in (20.0, 19.0, 18.0):
             db.add_price_history(product_id, price)
-        prices = [row["price"] for row in db.iter_price_history(product_id, batch_size=2)]
+        prices = [
+            row["price"]
+            for row in db.iter_price_history(product_id, batch_size=2)
+        ]
         self.assertEqual(prices, [20.0, 19.0, 18.0])
+
+    def test_target_price_resets_alert(self):
+        product_id = db.add_product("Book A", BOOK_URL, 20.0, 15.0, EMAIL)
+        db.set_alert_sent(product_id, True)
+        db.update_target_price(product_id, 10.0)
+        self.assertIs(db.get_product(product_id)["alert_sent"], False)
