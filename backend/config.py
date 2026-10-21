@@ -38,3 +38,6 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 MAX_PRODUCTS_PER_EMAIL = int(os.getenv("MAX_PRODUCTS_PER_EMAIL", "5"))  # stops one address being flooded
 DEMO_MODE = _get_bool("DEMO_MODE", False)
 EXTENSION_ID = os.getenv("EXTENSION_ID", "")
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
