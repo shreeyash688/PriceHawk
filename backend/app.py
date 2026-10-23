@@ -8,6 +8,7 @@ from functools import wraps
 from flask import Flask, Response, jsonify, request
 
 import config
+import currency
 from database import db
 from exceptions import PriceHawkError, ValidationError
 from services import export_service, tracker_service
@@ -81,7 +82,8 @@ def add_cors_headers(response):
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "demo_mode": config.DEMO_MODE})
+    return jsonify({"status": "ok", "demo_mode": config.DEMO_MODE,
+                    "currency": config.HOME_CURRENCY, "currency_symbol": currency.home_symbol()})
 
 
 @app.route("/api/preview", methods=["POST"])
@@ -89,7 +91,7 @@ def health():
 def preview():
     """Look up a product's title and price without saving it."""
     body = get_json_body()
-    return jsonify(tracker_service.preview_product(get_url_from_body(body), body.get("email")))
+    return jsonify(tracker_service.preview_product(get_url_from_body(body), body.get("email"), body.get("page")))
 
 
 @app.route("/api/products", methods=["POST"])
@@ -97,9 +99,18 @@ def preview():
 def add_product():
     body = get_json_body()
     product = tracker_service.track_product(
-        get_url_from_body(body), body.get("target_price"), body.get("email")
+        get_url_from_body(body), body.get("target_price"), body.get("email"), body.get("page")
     )
     return jsonify(product.to_dict()), 201
+
+
+@app.route("/api/products/observe", methods=["POST"])
+@handle_errors
+def observe():
+    """The extension read a tracked product's price in the browser (store blocked the server)."""
+    body = get_json_body()
+    product = tracker_service.observe_product(get_url_from_body(body), body.get("email"), body.get("page"))
+    return jsonify(product.to_dict())
 
 
 @app.route("/api/products", methods=["GET"])

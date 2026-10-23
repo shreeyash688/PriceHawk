@@ -25,7 +25,10 @@ LOG_FILE = os.getenv("LOG_FILE", os.path.join(BASE_DIR, "pricehawk.log"))
 # --- Scraping / monitoring ---
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))  # seconds
 CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "60"))
-# Currency is not a setting: each store's currency comes from its URL (see scrapers/).
+
+# --- Currency: every price is stored, shown and emailed in this currency ---
+HOME_CURRENCY = os.getenv("HOME_CURRENCY", "INR").strip().upper() or "INR"
+FX_LIVE_RATES = _get_bool("FX_LIVE_RATES", True)  # False = use the built-in approximate rates
 
 # --- Email ---
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")

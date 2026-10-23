@@ -4,6 +4,8 @@ from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
 
+import config
+
 from exceptions import PriceNotFoundError, ScraperError, UnsupportedURLError
 from scrapers.base_scraper import BaseScraper
 
@@ -65,6 +67,8 @@ class AmazonScraper(BaseScraper):
             "sec-fetch-site": "none",
             "sec-fetch-user": "?1",
             "upgrade-insecure-requests": "1",
+            # Ask Amazon's currency converter for prices in our home currency (e.g. INR on amazon.com)
+            "Cookie": f"i18n-prefs={config.HOME_CURRENCY}",
         })
         return headers
 

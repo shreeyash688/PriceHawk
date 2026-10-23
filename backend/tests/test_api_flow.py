@@ -250,5 +250,63 @@ class ApiFlowTests(DatabaseTestCase):
 
     def test_product_json_includes_currency_and_store(self):
         product = self.track().get_json()
-        self.assertEqual(product["currency"], "£")
+        self.assertEqual(product["currency"], "₹")  # every price is in the home currency
         self.assertEqual(product["retailer"], "Books to Scrape")
+
+    # ----- browser page data (store blocks the server) -----
+    def test_track_with_page_data_never_scrapes(self):
+        url = "https://www.amazon.com/Lenovo-Chromebook/dp/B0CVXYZ123?ref=x"
+        with patch("services.tracker_service.get_scraper", wraps=__import__("scrapers").get_scraper) as gs, \
+             patch("scrapers.base_scraper.BaseScraper.fetch_html", side_effect=AssertionError("no scraping")):
+            response = self.client.post("/api/products", json={
+                "url": url, "target_price": 40000, "email": "a@x.com",
+                "page": {"title": "Lenovo Chromebook", "price": 45999, "currency": "INR"}})
+        self.assertEqual(response.status_code, 201, response.get_json())
+        body = response.get_json()
+        self.assertEqual(body["url"], "https://www.amazon.com/dp/B0CVXYZ123")
+        self.assertEqual(body["current_price"], 45999)
+        self.assertEqual(body["currency"], "₹")
+
+    def test_page_prices_in_dollars_are_converted_to_rupees(self):
+        data = self.client.post("/api/preview", json={
+            "url": "https://www.amazon.com/dp/B0CVXYZ123",
+            "page": {"title": "Laptop", "price": 100, "currency": "USD"}}).get_json()
+        self.assertEqual(data["currency"], "₹")
+        self.assertEqual(data["price"], 8600.0)  # built-in test rate: 1 USD = 86 INR
+        self.assertEqual(data["original_price"], 100)
+        self.assertEqual(data["original_currency"], "$")
+        self.assertTrue(data["converted"])
+
+    def test_bad_page_data_is_400(self):
+        for page in ("x", {"price": 10}, {"title": "T", "price": -1}, {"title": "T", "price": 5, "currency": "x" * 20}):
+            with self.subTest(page=page):
+                response = self.client.post("/api/preview", json={"url": BOOK_URL, "page": page})
+                self.assertEqual(response.status_code, 400)
+
+    def test_page_data_still_checks_the_url(self):
+        import scrapers
+        for url in ("http://169.254.169.254/latest", "https://www.amazon.com/s?k=mouse"):
+            with self.subTest(url=url), patch("services.tracker_service.get_scraper", scrapers.get_scraper):
+                response = self.client.post("/api/preview", json={"url": url, "page": {"title": "x", "price": 1}})
+                self.assertEqual(response.status_code, 400)
+
+    def test_observe_records_price_and_alerts(self):
+        self.track(target=15)  # scraper says 20
+        response = self.client.post("/api/products/observe", json={
+            "url": BOOK_URL, "email": "a@x.com", "page": {"title": "Book", "price": 12, "currency": "INR"}})
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["current_price"], 12)
+        self.assertTrue(body["alert_sent"])
+        self.send_email.assert_called_once()
+        history = self.client.get(f"/api/products/{body['id']}/history").get_json()["history"]
+        self.assertEqual([h["price"] for h in history], [20, 12])
+
+    def test_observe_untracked_is_404(self):
+        response = self.client.post("/api/products/observe", json={
+            "url": BOOK_URL, "email": "nobody@x.com", "page": {"title": "Book", "price": 12}})
+        self.assertEqual(response.status_code, 404)
+
+    def test_health_reports_currency(self):
+        body = self.client.get("/api/health").get_json()
+        self.assertEqual((body["currency"], body["currency_symbol"]), ("INR", "₹"))

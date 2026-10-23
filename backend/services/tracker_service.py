@@ -13,8 +13,9 @@ import threading
 
 import config
 from database import db
+import currency as fx
 from exceptions import (DemoModeError, DuplicateProductError, PriceHawkError,
-                        ScraperError, ValidationError)
+                        ProductNotFoundError, ScraperError, ValidationError)
 from models.product import Product
 from scrapers import get_scraper
 from services import email_service
@@ -92,10 +93,53 @@ def _record_price(product_id, price):
 
 # ---------- actions used by the API ----------
 
-def preview_product(url, email=None):
+def _in_home_currency(data):
+    """Convert a scraped/page price to the home currency (INR), keeping the original for display."""
+    original_currency = data.get("currency")
+    data["original_price"] = data["price"]
+    data["original_currency"] = fx.symbol_for(fx.to_code(original_currency) or fx.home_code())
+    data["price"] = fx.to_home(data["price"], original_currency)
+    data["currency"] = fx.home_symbol()
+    data["converted"] = data["original_currency"] != data["currency"]
+    return data
+
+
+def _from_page(url, page):
+    """Product details the EXTENSION read from the page the user has open.
+
+    Shopping sites often block server requests (CAPTCHA), but the user's own browser
+    can always see the price. The URL is still validated by the store's scraper.
+    """
+    if not isinstance(page, dict):
+        raise ValidationError("page must be an object with title and price")
+    scraper = get_scraper(url)
+    clean_url = scraper.normalize_url(url)
+    title = " ".join(str(page.get("title") or "").split())[:500]
+    if not title:
+        raise ValidationError("page.title is required")
+    currency = page.get("currency")
+    if currency is not None and (not isinstance(currency, str) or len(currency) > 8):
+        raise ValidationError("page.currency must be a short currency code or symbol")
+    return {
+        "url": clean_url,
+        "title": title,
+        "price": _validate_price(page.get("price"), "page.price"),
+        "currency": currency or scraper.currency_for_url(clean_url),
+        "retailer": scraper.retailer_name,
+        "source": "page",
+    }
+
+
+def _lookup(url, page=None):
+    """Title + price (in home currency) from the browser's page data, or by scraping."""
+    data = _from_page(url, page) if page is not None else {**get_scraper(url).scrape(url), "source": "server"}
+    return _in_home_currency(data)
+
+
+def preview_product(url, email=None, page=None):
     """Look up a product WITHOUT saving it (used by the popup to show title and price).
     If an email is given, also says whether that email is already tracking it."""
-    data = get_scraper(url).scrape(url)
+    data = _lookup(url, page)
     data["already_tracked"] = False
     if email is not None:
         email = validate_email(email)
@@ -103,7 +147,7 @@ def preview_product(url, email=None):
     return data
 
 
-def track_product(url, target_price, email):
+def track_product(url, target_price, email, page=None):
     target = _validate_price(target_price, "target_price")
     email = validate_email(email)
     if db.count_products_for_email(email) >= config.MAX_PRODUCTS_PER_EMAIL:
@@ -111,13 +155,26 @@ def track_product(url, target_price, email):
             f"This email is already tracking {config.MAX_PRODUCTS_PER_EMAIL} products (the maximum)"
         )
 
-    data = get_scraper(url).scrape(url)
+    data = _lookup(url, page)
     if db.get_product_by_url_and_email(data["url"], email) is not None:
         raise DuplicateProductError("This email is already tracking this product")
 
     product_id = db.add_product(data["title"], data["url"], data["price"], target, email)
-    logger.info("Now tracking product %s (%s)", product_id, data["title"])
+    logger.info("Now tracking product %s (%s) from %s data", product_id, data["title"], data["source"])
     return _record_price(product_id, data["price"])  # first history entry + instant alert if already cheap
+
+
+def observe_product(url, email, page):
+    """The extension saw this product's live price in the browser: record it like a normal check.
+
+    Used when the store blocks the server, and whenever the user opens a page they track.
+    """
+    email = validate_email(email)
+    data = _lookup(url, page)
+    row = db.get_product_by_url_and_email(data["url"], email)
+    if row is None:
+        raise ProductNotFoundError("This product is not tracked by this email")
+    return _record_price(row["id"], data["price"])
 
 
 def get_product(product_id):
@@ -173,7 +230,7 @@ def check_product(product_id):
     """Scrape one product now and process the new price."""
     product = Product.from_row(db.get_product(product_id))
     try:
-        data = get_scraper(product.url).scrape(product.url)
+        data = _lookup(product.url)
     except ScraperError as error:
         db.record_error(product_id, str(error))
         logger.warning("Check failed for product %s: %s", product_id, error)

@@ -23,10 +23,11 @@ class EmailServiceTests(unittest.TestCase):
             message = server.send_message.call_args[0][0]
             self.assertEqual(message["To"], "buyer@x.com")
             self.assertEqual(message["From"], "PriceHawk <sender@gmail.com>")
-            self.assertIn("£30.00", message.get_body(("plain",)).get_content())
+            self.assertIn("₹30.00", message.get_body(("plain",)).get_content())
 
-    def test_indian_stores_are_emailed_in_rupees(self):
-        for url in ("https://www.amazon.in/dp/B0DXNT1234",
+    def test_every_store_is_emailed_in_rupees(self):
+        for url in ("https://www.amazon.in/dp/B0DXNT1234", "https://www.amazon.com/dp/B0DXNT1234",
+                    "http://books.toscrape.com/x",
                     "https://www.flipkart.com/x/p/itm123",
                     "https://www.myntra.com/shirts/x/12345678/buy"):
             with self.subTest(url=url), patch.multiple(config, **SENDER), \
@@ -39,6 +40,7 @@ class EmailServiceTests(unittest.TestCase):
                     self.assertIn("₹1,499.00", body)
                     self.assertNotIn("£", body)
                     self.assertNotIn("€", body)
+                    self.assertNotIn("$", body)
                 self.assertIn("₹1,499.00", message["Subject"])
 
     def test_html_part_escapes_the_title(self):

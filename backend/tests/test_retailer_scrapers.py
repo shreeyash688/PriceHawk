@@ -615,19 +615,20 @@ class MultiRetailerApiIntegrationTests(unittest.TestCase):
         with patch("scrapers.base_scraper.BaseScraper.fetch_html", return_value=mock_html), \
              patch("services.email_service.send_price_alert", return_value=True) as mock_email:
 
-            # 1. Track the eBay product
+            # 1. Track the eBay product (target is in rupees; $1 = ₹86 with the test rates)
             track_res = self.client.post("/api/products", json={
                 "url": "https://www.ebay.com/itm/987654321098",
-                "target_price": 100.00,
+                "target_price": 10000.00,
                 "email": "ebaybuyer@example.com"
             })
             self.assertEqual(track_res.status_code, 201)
             prod = track_res.get_json()
             prod_id = prod["id"]
-            self.assertEqual(prod["current_price"], 150.00)
-            self.assertEqual(prod["target_price"], 100.00)
+            self.assertEqual(prod["current_price"], 12900.00)  # $150 -> ₹12,900
+            self.assertEqual(prod["currency"], "₹")
+            self.assertEqual(prod["target_price"], 10000.00)
 
-            # Price is 150, target is 100 -> no email yet
+            # Price is ₹12,900, target is ₹10,000 -> no email yet
             self.assertFalse(mock_email.called)
 
             # 2. Price drops to $90 (below target $100) -> check product
@@ -643,7 +644,7 @@ class MultiRetailerApiIntegrationTests(unittest.TestCase):
                 check_res = self.client.post(f"/api/products/{prod_id}/check")
                 self.assertEqual(check_res.status_code, 200)
                 checked = check_res.get_json()
-                self.assertEqual(checked["current_price"], 90.00)
+                self.assertEqual(checked["current_price"], 7740.00)  # $90 -> ₹7,740
                 self.assertTrue(checked["alert_sent"])
                 # Email alert was triggered!
                 self.assertTrue(mock_email.called)
@@ -724,7 +725,8 @@ class RegressionBooksOnlyErrorTests(unittest.TestCase):
             self.assertEqual(res.status_code, 201)
             body = res.get_json()
             self.assertNotIn("Only books.toscrape.com", str(body))
-            self.assertEqual(body["current_price"], 999.00)
+            self.assertEqual(body["current_price"], 85914.00)  # $999 converted to rupees
+            self.assertEqual(body["currency"], "₹")
 
     def test_unsupported_error_message_lists_all_supported_retailers(self):
         res = self.client.post("/api/preview", json={"url": "https://unsupported-shop.xyz/p/123"})
@@ -772,6 +774,55 @@ class CurrencyTests(unittest.TestCase):
                 self.assertFalse(AmazonScraper().can_handle(url))
                 with self.assertRaises(UnsupportedURLError):
                     get_scraper(url)
+
+
+
+class HomeCurrencyTests(unittest.TestCase):
+    def test_currency_detection(self):
+        import currency
+        cases = {"₹1,499": "INR", "INR 45,999.00": "INR", "Rs. 999": "INR", "$24.99": "USD",
+                 "US$5": "USD", "CA$ 20": "CAD", "£51.77": "GBP", "1.299,00 €": "EUR", "USD": "USD",
+                 "S$10": "SGD", "12.00": None, "": None}
+        for text, code in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(currency.to_code(text), code)
+
+    def test_conversion_and_cache(self):
+        import currency
+        self.assertEqual(currency.to_home(10, "₹"), 10)
+        self.assertEqual(currency.to_home(10, None), 10)
+        self.assertEqual(currency.to_home(10, "USD"), 860)
+
+    def test_live_rate_is_used_when_available(self):
+        import config, currency
+        currency._cache.clear()
+        fake = MagicMock()
+        fake.json.return_value = {"rates": {"INR": 83.5}}
+        with patch.object(config, "FX_LIVE_RATES", True), patch("currency.requests.get", return_value=fake):
+            self.assertEqual(currency.to_home(2, "USD"), 167.0)
+        currency._cache.clear()
+
+    def test_live_rate_failure_falls_back(self):
+        import config, currency, requests
+        currency._cache.clear()
+        with patch.object(config, "FX_LIVE_RATES", True), \
+             patch("currency.requests.get", side_effect=requests.ConnectionError("offline")):
+            self.assertEqual(currency.to_home(1, "USD"), 86.0)
+        currency._cache.clear()
+
+    def test_amazon_page_showing_inr_on_amazon_com(self):
+        html = """<html><span id="productTitle">Lenovo Chromebook</span>
+                  <span class="a-price"><span class="a-offscreen">INR 45,999.00</span></span></html>"""
+        scraper = AmazonScraper()
+        with patch.object(scraper, "fetch_html", return_value=html):
+            data = scraper.scrape("https://www.amazon.com/dp/B0CVXYZ123")
+        self.assertEqual((data["price"], data["currency"]), (45999.0, "₹"))
+
+    def test_amazon_requests_prices_in_home_currency(self):
+        self.assertIn("i18n-prefs=INR", AmazonScraper().get_headers("https://www.amazon.com/dp/B0CVXYZ123")["Cookie"])
+
+    def test_european_number_format(self):
+        self.assertEqual(AmazonScraper().extract_numeric_price("1.299,00 €"), 1299.0)
 
 
 if __name__ == "__main__":

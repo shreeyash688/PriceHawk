@@ -1,13 +1,15 @@
 PriceHawk --- Project Context
 
 > **Implementation status (23/10/26) — read this first.** The sections below are the original
-> specification. The code has since grown past it in three deliberate ways:
+> specification. The code has since grown past it in four deliberate ways:
 > 1. **Database:** Supabase (PostgreSQL) instead of SQLite. Schema: `backend/database/schema.sql`;
 >    CRUD: `backend/database/db.py`. Tests mock Supabase, so they still need no network.
 > 2. **Stores:** Amazon, Flipkart, Myntra and eBay scrapers were added next to Books to Scrape.
 >    Each keeps a strict host/path allow-list (SSRF protection).
-> 3. **Currency:** decided per store from the URL (`currency_for_url`), e.g. ₹ for Amazon.in,
->    Flipkart, Myntra. Used in the API, the popup and the alert email.
+> 3. **Currency:** every price is stored, shown and emailed in `HOME_CURRENCY` (INR). Other currencies
+>    are converted in `backend/currency.py`.
+> 4. **Blocked stores:** when Amazon blocks the server, the extension reads the price in the user's
+>    browser and sends it to the backend (`page` data, `POST /api/products/observe`).
 >
 > Where this file says "SQLite" or "Books to Scrape only", the points above take priority.
 
@@ -398,7 +400,7 @@ entry.
 Backend: Flask.
 Database: Supabase / PostgreSQL (originally SQLite).
 Stores: Books to Scrape, Amazon, Flipkart, Myntra, eBay.
-Currency: per store, from the URL (₹ for Indian stores).
+Currency: everything in INR (HOME_CURRENCY), converted when a store uses another currency.
 Scraping: Requests + BeautifulSoup.
 Monitoring: Python threading.
 Alerts: SMTP email.

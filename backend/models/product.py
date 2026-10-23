@@ -1,5 +1,6 @@
 """The Product class: one tracked product."""
-from scrapers import currency_for_url, retailer_for_url
+import currency as fx
+from scrapers import retailer_for_url
 
 
 class Product:
@@ -25,8 +26,8 @@ class Product:
 
     @property
     def currency(self):
-        """Store currency, worked out from the URL (amazon.in / Flipkart / Myntra -> ₹)."""
-        return currency_for_url(self.url)
+        """All prices are stored in the home currency (₹ by default), whatever the store."""
+        return fx.home_symbol()
 
     @property
     def retailer(self):

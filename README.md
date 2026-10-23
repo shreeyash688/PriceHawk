@@ -6,10 +6,19 @@ The backend stores the product in Supabase, re-checks the price in a background 
 **once** when the price reaches your target.
 
 **Supported stores:** Amazon (amazon.in, .com, .co.uk, …), Flipkart, Myntra, eBay, and Books to Scrape (practice site).
-Prices are always shown and emailed in the **store's own currency** — ₹ for Amazon.in, Flipkart and Myntra.
+Every price is stored, shown and emailed in **rupees (₹)**: set by `HOME_CURRENCY=INR` in `.env`.
+Stores that answer in another currency (e.g. Amazon.com in USD) are converted with a live exchange rate
+(cached 6 h, built-in approximate rates if offline). The popup shows the original, e.g. "converted from $539.99".
 
-> Amazon, Flipkart and Myntra sometimes block automated requests (CAPTCHA). PriceHawk reports this as
-> "Check failed" instead of crashing. For a reliable demo use Books to Scrape or Demo mode.
+### When a store blocks the server (Amazon CAPTCHA)
+Amazon often blocks requests from the Python backend. PriceHawk works around it with the user's own browser:
+- **Tracking:** the popup reads the title and price from the open page and sends them with the link,
+  so the backend doesn't need to scrape at all (the link is still validated).
+- **Check now:** if the server is blocked, the popup reads the page through the browser (a quick fetch,
+  then a hidden background tab) and records that price with `POST /api/products/observe`.
+- **Opening the Tracked tab** quietly refreshes blocked products through the browser.
+- **Opening the popup on a product you track** records the price you're looking at.
+Alerts work exactly the same whichever way the price arrives.
 
 ## 1. Database (Supabase) — once
 1. Create a Supabase project.
@@ -52,6 +61,7 @@ Optional: copy the extension ID into `EXTENSION_ID` in `.env` so only your exten
 | `backend/scrapers/base_scraper.py` | Abstract `BaseScraper`: download, JSON-LD, price parsing, `currency_for_url` |
 | `backend/scrapers/*_scraper.py` | One subclass per store: URL allow-list + page parsing |
 | `backend/scrapers/__init__.py` | `get_scraper(url)`, `currency_for_url(url)` |
+| `backend/currency.py` | Detect currencies in price text, convert to `HOME_CURRENCY` (live rate + cache + fallback) |
 | `backend/models/product.py` | `Product` class (`currency`, `price_gap`, `to_dict`, …) |
 | `backend/database/schema.sql` | Supabase/PostgreSQL tables (run once) |
 | `backend/database/db.py` | All database CRUD (Supabase client) |
@@ -59,7 +69,7 @@ Optional: copy the extension ID into `EXTENSION_ID` in `.env` so only your exten
 | `backend/services/monitor.py` | Background thread |
 | `backend/services/email_service.py` | SMTP email (plain text + HTML) |
 | `backend/services/export_service.py` | CSV export (generators) |
-| `backend/tests/` | 115 automated tests (Supabase and websites are mocked) |
+| `backend/tests/` | 129 automated tests (Supabase, websites and exchange rates are mocked) |
 | `extension/` | `manifest.json`, `popup.html/css/js`, icons |
 
 ## API (for the extension)
@@ -67,9 +77,10 @@ All responses are JSON. Errors look like `{"error": "message"}` with status 400 
 
 | Method + URL | Body | What it does |
 |---|---|---|
-| `GET /api/health` | | Is the backend running? (+ `demo_mode`) |
-| `POST /api/preview` | `{"url", "email"?}` | Title, price, currency **without** saving (with `email`, also `already_tracked`) |
-| `POST /api/products` | `{"url", "target_price", "email"}` | Start tracking (201) |
+| `GET /api/health` | | Is the backend running? (+ `demo_mode`, `currency`) |
+| `POST /api/preview` | `{"url", "email"?, "page"?}` | Title + price in ₹ **without** saving (+ `original_price`, `already_tracked`) |
+| `POST /api/products` | `{"url", "target_price", "email", "page"?}` | Start tracking (201) |
+| `POST /api/products/observe` | `{"url", "email", "page"}` | Record a price the browser read for a product this email tracks |
 | `GET /api/products?email=&sort=newest\|deals` | | That email's products (`deals` = closest to target first) |
 | `GET /api/products/<id>` | | One product |
 | `PUT /api/products/<id>` | `{"target_price"?, "tracking_active"?}` | Change target / pause / resume (all-or-nothing) |
@@ -79,6 +90,10 @@ All responses are JSON. Errors look like `{"error": "message"}` with status 400 
 | `GET /api/export/products.csv?email=` | | CSV of that email's products |
 | `GET /api/export/history.csv?email=&product_id=` | | CSV of that email's history (optionally one product) |
 | `POST /api/products/<id>/simulate` | `{"price"}` | **Demo mode only**: fake a price |
+
+`page` = what the extension read from the open page: `{"title", "price", "currency"?}` (currency as code or symbol, e.g. `"INR"`, `"$"`).
+When `page` is sent, the backend validates the link but doesn't scrape. Known limit: a user could send a fake
+price, but it only affects their own tracking.
 
 A product looks like: `{id, title, url, retailer, currency, notify_email, current_price, target_price, price_gap, tracking_active, alert_sent, created_at, last_checked_at, last_error}`.
 
@@ -120,7 +135,8 @@ email and a product id could view or change that product. Real accounts would fi
 | Threading | `services/monitor.py` (thread + `Event`), `_alert_lock` in `tracker_service.py` |
 | Logging | `setup_logging()` in `app.py`, `logging.getLogger(__name__)` everywhere |
 | Networking | `requests` in `base_scraper.py`, `smtplib` in `email_service.py` |
-| Regular expressions | URL allow-lists in each scraper, `EMAIL_PATTERN` |
+| Regular expressions | URL allow-lists in each scraper, `EMAIL_PATTERN`, currency detection in `currency.py` |
+| Caching + thread safety | exchange-rate cache with a `threading.Lock` in `currency.py` |
 | Security | host/path allow-list (SSRF), secrets in `.env`, narrow CORS, RLS on tables, HTML-escaped emails |
 
 ## Notes

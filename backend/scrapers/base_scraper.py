@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import requests
 
 import config
+import currency as fx
 from exceptions import PriceNotFoundError, ScraperError, UnsupportedURLError
 
 DEFAULT_HEADERS = {
@@ -25,17 +26,6 @@ DEFAULT_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
-}
-
-
-CURRENCY_MAP = {
-    "GBP": "£",
-    "USD": "$",
-    "INR": "₹",
-    "EUR": "€",
-    "CAD": "CA$",
-    "AUD": "AU$",
-    "JPY": "¥",
 }
 
 
@@ -64,11 +54,8 @@ class BaseScraper(ABC):
         """
 
     def currency_for_url(self, url):
-        """Currency symbol this store prices in, decided by the (normalized) URL.
-
-        This is the single source of truth for currency: the same answer is used
-        when scraping, in the API response and in the alert email.
-        """
+        """The store's own currency (amazon.in -> ₹). Used when the page shows no currency.
+        Prices are converted to the home currency afterwards (see currency.py)."""
         return self.default_currency
 
     def get_headers(self, url):
@@ -76,38 +63,32 @@ class BaseScraper(ABC):
         return dict(DEFAULT_HEADERS)
 
     def extract_currency_symbol(self, text_or_code, default=None):
-        """Detect or map currency symbol from currency code or price string."""
-        if not text_or_code:
-            return default or self.default_currency
-
-        text_str = str(text_or_code).strip()
-        upper_code = text_str.upper()
-        if upper_code in CURRENCY_MAP:
-            return CURRENCY_MAP[upper_code]
-
-        for code, sym in CURRENCY_MAP.items():
-            if sym in text_str or code in upper_code:
-                return sym
-
-        return default or self.default_currency
+        """Detect the currency in a price string or code ('INR 45,999', '$24.99', 'GBP')."""
+        code = fx.to_code(text_or_code)
+        return fx.symbol_for(code) if code else (default or self.default_currency)
 
     def extract_numeric_price(self, text):
-        """Parse numeric price from messy currency strings (e.g. '₹1,499.00', '$24.99')."""
+        """Parse a price from messy text: '₹1,499.00', 'INR 45,999', '$24.99', '1.299,00 €'."""
         if not text:
             raise PriceNotFoundError("Empty price text")
 
-        cleaned = str(text).replace(",", "").replace("\xa0", " ").strip()
-        match = re.search(r"(\d+(?:\.\d{1,2})?)", cleaned)
+        match = re.search(r"\d[\d.,\s]*", str(text).replace("\xa0", " "))
         if match is None:
             raise PriceNotFoundError(f"Could not parse a numeric price from '{text}'")
 
+        number = re.sub(r"\s", "", match.group(0)).rstrip(".,")
+        last_comma, last_dot = number.rfind(","), number.rfind(".")
+        if last_comma > last_dot and len(number) - last_comma - 1 == 2:
+            number = number.replace(".", "").replace(",", ".")  # European style 1.299,00
+        else:
+            number = number.replace(",", "")                    # 1,299.00 / 45,999
         try:
-            val = float(match.group(1))
-            if not math.isfinite(val) or val <= 0:
-                raise PriceNotFoundError("Price must be a positive finite number")
-            return round(val, 2)
-        except (ValueError, TypeError):
+            value = float(number)
+        except ValueError:
             raise PriceNotFoundError(f"Invalid price value '{text}'")
+        if not math.isfinite(value) or value <= 0:
+            raise PriceNotFoundError("Price must be a positive finite number")
+        return round(value, 2)
 
     def extract_from_json_ld(self, soup):
         """Extract product title, price, currency, and availability from Schema.org JSON-LD if present."""
@@ -215,7 +196,7 @@ class BaseScraper(ABC):
         if isinstance(parsed, dict):
             title = parsed.get("title")
             price = parsed.get("price")
-            currency = parsed.get("currency", self.default_currency)
+            currency = parsed.get("currency")
             available = parsed.get("available", True)
         elif isinstance(parsed, (list, tuple)):
             if len(parsed) >= 4:
@@ -238,11 +219,17 @@ class BaseScraper(ABC):
         if price is None or not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
             raise PriceNotFoundError("Could not find a valid product price")
 
+        # Currency actually shown on the page wins (e.g. amazon.com showing "INR 45,999");
+        # if the parser only fell back to its class default, use the store's own currency.
+        store_currency = self.currency_for_url(clean_url)
+        if not currency or (currency == self.default_currency and store_currency != self.default_currency):
+            currency = store_currency
+
         return {
             "url": clean_url,
             "title": title.strip(),
             "price": round(float(price), 2),
-            "currency": self.currency_for_url(clean_url) or currency or self.default_currency,
+            "currency": currency,
             "available": bool(available),
             "retailer": self.retailer_name,
         }

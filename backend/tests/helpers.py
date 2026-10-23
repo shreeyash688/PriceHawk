@@ -16,10 +16,19 @@ BOOK_URL_2 = "http://books.toscrape.com/catalogue/tipping-the-velvet_999/index.h
 
 
 class FakeScraper:
-    """Pretends to be a website. Change .price to simulate price changes."""
+    """Pretends to be a website. Change .price to simulate price changes.
+    Prices come back without a currency, i.e. already in the home currency (₹)."""
+
+    retailer_name = "Fake store"
 
     def __init__(self, price=51.77):
         self.price = price
+
+    def normalize_url(self, url):
+        return url.split("?")[0]
+
+    def currency_for_url(self, url):
+        return "₹"
 
     def scrape(self, url):
         return {
