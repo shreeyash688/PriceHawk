@@ -38,9 +38,9 @@ def init_db():
         _client().table("price_history").select("id").limit(1).execute()
     except APIError as error:
         raise RuntimeError(
-            "Could not access the Supabase tables. Check that the products "
-            "and price_history tables exist and that backend/.env contains "
-            "the correct Supabase credentials."
+            "Could not access the Supabase tables. Run backend/database/schema.sql "
+            "in the Supabase SQL Editor, and check SUPABASE_URL / SUPABASE_KEY "
+            "in backend/.env."
         ) from error
 
 

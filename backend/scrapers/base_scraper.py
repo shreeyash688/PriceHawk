@@ -5,6 +5,7 @@ OOP ideas shown here:
   * Inheritance  - BooksScraper, AmazonScraper, etc., inherit the shared code.
 """
 from abc import ABC, abstractmethod
+import json
 import math
 import re
 from urllib.parse import urlparse
@@ -62,6 +63,14 @@ class BaseScraper(ABC):
             (title, price) / (title, price, currency, available)
         """
 
+    def currency_for_url(self, url):
+        """Currency symbol this store prices in, decided by the (normalized) URL.
+
+        This is the single source of truth for currency: the same answer is used
+        when scraping, in the API response and in the alert email.
+        """
+        return self.default_currency
+
     def get_headers(self, url):
         """Return HTTP headers for fetching the page."""
         return dict(DEFAULT_HEADERS)
@@ -102,7 +111,6 @@ class BaseScraper(ABC):
 
     def extract_from_json_ld(self, soup):
         """Extract product title, price, currency, and availability from Schema.org JSON-LD if present."""
-        import json
 
         scripts = soup.select('script[type="application/ld+json"]')
         for script in scripts:
@@ -234,7 +242,7 @@ class BaseScraper(ABC):
             "url": clean_url,
             "title": title.strip(),
             "price": round(float(price), 2),
-            "currency": currency or self.default_currency,
+            "currency": self.currency_for_url(clean_url) or currency or self.default_currency,
             "available": bool(available),
             "retailer": self.retailer_name,
         }

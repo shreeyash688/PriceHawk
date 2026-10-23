@@ -738,5 +738,41 @@ class RegressionBooksOnlyErrorTests(unittest.TestCase):
         self.assertIn("Myntra", error_msg)
 
 
+
+class CurrencyTests(unittest.TestCase):
+    """Currency comes from the store/domain, so emails and the popup always agree."""
+
+    def test_currency_per_store(self):
+        from scrapers import currency_for_url
+        cases = [
+            ("https://www.amazon.in/dp/B09G9D8KRQ", "₹"),
+            ("https://www.flipkart.com/x/p/itm123", "₹"),
+            ("https://www.myntra.com/shirts/x/12345678/buy", "₹"),
+            ("https://www.amazon.com/dp/B08N5WRWNW", "$"),
+            ("https://www.amazon.co.uk/dp/B08N5WRWNW", "£"),
+            ("https://www.amazon.de/dp/B08N5WRWNW", "€"),
+            ("https://www.ebay.co.uk/itm/123456789012", "£"),
+            ("http://books.toscrape.com/catalogue/a_1/index.html", "£"),
+        ]
+        for url, symbol in cases:
+            with self.subTest(url=url):
+                self.assertEqual(currency_for_url(url), symbol)
+
+    def test_amazon_in_scrape_is_rupees_even_without_symbol_in_page(self):
+        html = """<html><span id="productTitle">Mouse</span>
+                  <span class="a-price"><span class="a-offscreen">370.00</span></span></html>"""
+        scraper = AmazonScraper()
+        with patch.object(scraper, "fetch_html", return_value=html):
+            self.assertEqual(scraper.scrape("https://www.amazon.in/dp/B0DXNT1234")["currency"], "₹")
+
+    def test_unknown_amazon_lookalike_domains_rejected(self):
+        for url in ("https://www.amazon.xyz/dp/B08N5WRWNW", "https://evil.amazon.zz/dp/B08N5WRWNW",
+                    "https://shop.amazon.in.evil.com/dp/B08N5WRWNW"):
+            with self.subTest(url=url):
+                self.assertFalse(AmazonScraper().can_handle(url))
+                with self.assertRaises(UnsupportedURLError):
+                    get_scraper(url)
+
+
 if __name__ == "__main__":
     unittest.main()

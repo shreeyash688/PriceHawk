@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PriceHawk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Track prices. Catch deals. Save money.",
   "action": {
     "default_popup": "popup.html",
@@ -33,16 +33,29 @@
     "*://*.amazon.fr/*",
     "*://*.amazon.es/*",
     "*://*.amazon.it/*",
+    "*://*.amazon.nl/*",
     "*://*.amazon.com.au/*",
+    "*://*.amazon.co.jp/*",
+    "*://*.amazon.ae/*",
+    "*://*.amazon.sa/*",
+    "*://*.amazon.sg/*",
+    "*://*.amazon.com.br/*",
+    "*://*.amazon.com.mx/*",
     "*://*.flipkart.com/*",
+    "*://*.myntra.com/*",
     "*://*.ebay.com/*",
     "*://*.ebay.co.uk/*",
     "*://*.ebay.ca/*",
     "*://*.ebay.com.au/*",
     "*://*.ebay.de/*",
-    "*://*.myntra.com/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  }
+    "*://*.ebay.fr/*",
+    "*://*.ebay.es/*",
+    "*://*.ebay.it/*",
+    "*://*.ebay.nl/*",
+    "*://*.ebay.ie/*",
+    "*://*.ebay.at/*",
+    "*://*.ebay.ch/*",
+    "*://*.ebay.be/*",
+    "*://*.ebay.pl/*"
+  ]
 }

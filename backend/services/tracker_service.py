@@ -142,11 +142,16 @@ def update_product(product_id, data):
     if "target_price" not in data and "tracking_active" not in data:
         raise ValidationError("Send target_price and/or tracking_active")
 
+    # Validate EVERYTHING first, then write: a bad field never leaves a half-applied update.
+    new_target = None
     if "target_price" in data:
-        db.update_target_price(product_id, _validate_price(data["target_price"], "target_price"))
+        new_target = _validate_price(data["target_price"], "target_price")
+    if "tracking_active" in data and not isinstance(data["tracking_active"], bool):
+        raise ValidationError("tracking_active must be true or false")
+
+    if new_target is not None:
+        db.update_target_price(product_id, new_target)
     if "tracking_active" in data:
-        if not isinstance(data["tracking_active"], bool):
-            raise ValidationError("tracking_active must be true or false")
         db.set_tracking_active(product_id, data["tracking_active"])
     return get_product(product_id)
 

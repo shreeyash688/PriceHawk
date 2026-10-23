@@ -240,3 +240,15 @@ class ApiFlowTests(DatabaseTestCase):
         resumed = self.client.put(f"/api/products/{product_id}", json={"tracking_active": True}).get_json()
         self.assertTrue(resumed["tracking_active"])
 
+    def test_bad_update_changes_nothing(self):
+        product_id = self.track(target=15).get_json()["id"]
+        response = self.client.put(f"/api/products/{product_id}",
+                                   json={"target_price": 99, "tracking_active": "no"})
+        self.assertEqual(response.status_code, 400)
+        product = self.client.get(f"/api/products/{product_id}").get_json()
+        self.assertEqual(product["target_price"], 15)  # target NOT half-applied
+
+    def test_product_json_includes_currency_and_store(self):
+        product = self.track().get_json()
+        self.assertEqual(product["currency"], "£")
+        self.assertEqual(product["retailer"], "Books to Scrape")

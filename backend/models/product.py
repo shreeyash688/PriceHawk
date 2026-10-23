@@ -1,4 +1,5 @@
 """The Product class: one tracked product."""
+from scrapers import currency_for_url, retailer_for_url
 
 
 class Product:
@@ -10,7 +11,7 @@ class Product:
         self.url = url
         self.current_price = current_price
         self.target_price = target_price
-        self.tracking_active = bool(tracking_active)  # SQLite stores 0/1
+        self.tracking_active = bool(tracking_active)
         self.alert_sent = bool(alert_sent)
         self.created_at = created_at
         self.last_checked_at = last_checked_at
@@ -23,9 +24,22 @@ class Product:
         return cls(**dict(row))
 
     @property
+    def currency(self):
+        """Store currency, worked out from the URL (amazon.in / Flipkart / Myntra -> ₹)."""
+        return currency_for_url(self.url)
+
+    @property
+    def retailer(self):
+        return retailer_for_url(self.url)
+
+    @property
     def price_gap(self):
         """current - target. Zero or negative means the target has been reached."""
         return round(self.current_price - self.target_price, 2)
+
+    def format_price(self, value):
+        """e.g. 1499.0 -> '₹1,499.00'"""
+        return f"{self.currency}{value:,.2f}"
 
     def to_dict(self):
         """Plain dictionary, ready to be sent as JSON."""
@@ -33,6 +47,8 @@ class Product:
             "id": self.id,
             "title": self.title,
             "url": self.url,
+            "retailer": self.retailer,
+            "currency": self.currency,
             "notify_email": self.notify_email,
             "current_price": self.current_price,
             "target_price": self.target_price,
@@ -45,4 +61,5 @@ class Product:
         }
 
     def __repr__(self):
-        return f"<Product {self.id}: {self.title} £{self.current_price} (target £{self.target_price})>"
+        return (f"<Product {self.id}: {self.title} {self.format_price(self.current_price)} "
+                f"(target {self.format_price(self.target_price)})>")

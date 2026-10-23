@@ -25,6 +25,9 @@ DOMAIN_DEFAULT_CURRENCIES = {
     "at": "€",
     "ca": "CA$",
     "com.au": "AU$",
+    "be": "€",
+    "ch": "CHF",
+    "pl": "zł",
     "com": "$",
 }
 
@@ -36,6 +39,11 @@ class EbayScraper(BaseScraper):
     def _get_tld(self, hostname):
         match = EBAY_HOST_RE.match(hostname or "")
         return match.group(1).lower() if match else "com"
+
+    def currency_for_url(self, url):
+        """ebay.co.uk -> £, ebay.de -> €, ebay.com -> $ ..."""
+        host = urlparse(str(url)).hostname or ""
+        return DOMAIN_DEFAULT_CURRENCIES.get(self._get_tld(host.lower()), self.default_currency)
 
     def can_handle(self, url):
         try:

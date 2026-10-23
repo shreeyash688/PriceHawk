@@ -7,8 +7,8 @@ from models.product import Product
 from services import email_service
 
 
-def make_product(email="buyer@x.com"):
-    return Product(1, "A Light in the Attic", "http://books.toscrape.com/x", 30.0, 40.0,
+def make_product(email="buyer@x.com", url="http://books.toscrape.com/x", price=30.0, target=40.0):
+    return Product(1, "A Light in the Attic", url, price, target,
                    1, 0, "t", "t", None, email)
 
 
@@ -22,8 +22,45 @@ class EmailServiceTests(unittest.TestCase):
             self.assertTrue(email_service.send_price_alert(make_product("buyer@x.com")))
             message = server.send_message.call_args[0][0]
             self.assertEqual(message["To"], "buyer@x.com")
-            self.assertEqual(message["From"], "sender@gmail.com")
-            self.assertIn("£30.00", message.get_content())
+            self.assertEqual(message["From"], "PriceHawk <sender@gmail.com>")
+            self.assertIn("£30.00", message.get_body(("plain",)).get_content())
+
+    def test_indian_stores_are_emailed_in_rupees(self):
+        for url in ("https://www.amazon.in/dp/B0DXNT1234",
+                    "https://www.flipkart.com/x/p/itm123",
+                    "https://www.myntra.com/shirts/x/12345678/buy"):
+            with self.subTest(url=url), patch.multiple(config, **SENDER), \
+                 patch("services.email_service.smtplib.SMTP") as smtp:
+                product = make_product(url=url, price=1499.0, target=1500.0)
+                self.assertTrue(email_service.send_price_alert(product))
+                message = smtp.return_value.__enter__.return_value.send_message.call_args[0][0]
+                for part in ("plain", "html"):
+                    body = message.get_body((part,)).get_content()
+                    self.assertIn("₹1,499.00", body)
+                    self.assertNotIn("£", body)
+                    self.assertNotIn("€", body)
+                self.assertIn("₹1,499.00", message["Subject"])
+
+    def test_html_part_escapes_the_title(self):
+        product = make_product()
+        product.title = "<script>alert(1)</script>"
+        html_body = email_service.build_message(product, "s@x.com").get_body(("html",)).get_content()
+        self.assertNotIn("<script>", html_body)
+
+    def test_wrong_password_does_not_retry_on_465(self):
+        with patch.multiple(config, SMTP_PORT=587, **SENDER), \
+             patch("services.email_service.smtplib.SMTP",
+                   side_effect=smtplib.SMTPAuthenticationError(535, b"bad")), \
+             patch("services.email_service.smtplib.SMTP_SSL") as smtp_ssl:
+            self.assertFalse(email_service.send_price_alert(make_product()))
+            smtp_ssl.assert_not_called()
+
+    def test_blocked_port_falls_back_to_ssl(self):
+        with patch.multiple(config, SMTP_PORT=587, **SENDER), \
+             patch("services.email_service.smtplib.SMTP", side_effect=ConnectionRefusedError()), \
+             patch("services.email_service.smtplib.SMTP_SSL") as smtp_ssl:
+            self.assertTrue(email_service.send_price_alert(make_product()))
+            smtp_ssl.assert_called_with("smtp.gmail.com", 465, timeout=15)
 
     def test_not_configured_returns_false(self):
         with patch.multiple(config, SMTP_USER="", SMTP_PASSWORD=""):
@@ -33,7 +70,8 @@ class EmailServiceTests(unittest.TestCase):
         for error in (smtplib.SMTPAuthenticationError(535, b"bad"), ConnectionRefusedError()):
             with self.subTest(error=type(error).__name__):
                 with patch.multiple(config, **SENDER), \
-                     patch("services.email_service.smtplib.SMTP", side_effect=error):
+                     patch("services.email_service.smtplib.SMTP", side_effect=error), \
+                     patch("services.email_service.smtplib.SMTP_SSL", side_effect=error):
                     self.assertFalse(email_service.send_price_alert(make_product()))
 
     def test_dummy_credentials_detected_as_not_configured(self):

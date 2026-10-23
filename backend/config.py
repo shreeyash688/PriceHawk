@@ -20,13 +20,12 @@ HOST = "127.0.0.1"  # only this computer can reach the API
 PORT = int(os.getenv("PORT", "5000"))
 
 # --- Files ---
-DB_PATH = os.getenv("DB_PATH", os.path.join(BASE_DIR, "pricehawk.db"))
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(BASE_DIR, "pricehawk.log"))
 
 # --- Scraping / monitoring ---
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))  # seconds
 CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "60"))
-CURRENCY_SYMBOL = "£"  # Books to Scrape prices are in pounds
+# Currency is not a setting: each store's currency comes from its URL (see scrapers/).
 
 # --- Email ---
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -39,5 +38,6 @@ MAX_PRODUCTS_PER_EMAIL = int(os.getenv("MAX_PRODUCTS_PER_EMAIL", "5"))  # stops 
 DEMO_MODE = _get_bool("DEMO_MODE", False)
 EXTENSION_ID = os.getenv("EXTENSION_ID", "")
 
+# --- Database (Supabase / PostgreSQL). Use the server-side secret key, never the anon key. ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")

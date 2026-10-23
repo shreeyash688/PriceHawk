@@ -7,8 +7,10 @@ from bs4 import BeautifulSoup
 from exceptions import PriceNotFoundError, ScraperError, UnsupportedURLError
 from scrapers.base_scraper import BaseScraper
 
+# Only real Amazon storefronts (same list as the extension's manifest/popup).
 AMAZON_HOST_RE = re.compile(
-    r"^(?:[a-zA-Z0-9\-]+\.)?amazon\.(?:[a-zA-Z]{2,3}(?:\.[a-zA-Z]{2})?)$",
+    r"^(?:www\.|m\.|smile\.)?amazon\."
+    r"(com|in|co\.uk|ca|de|fr|es|it|nl|com\.au|co\.jp|ae|sa|sg|com\.br|com\.mx)$",
     re.IGNORECASE
 )
 
@@ -30,6 +32,9 @@ DOMAIN_DEFAULT_CURRENCIES = {
     "co.jp": "¥",
     "ae": "AED",
     "sa": "SAR",
+    "sg": "S$",
+    "com.br": "R$",
+    "com.mx": "MX$",
     "com": "$",
 }
 
@@ -39,12 +44,13 @@ class AmazonScraper(BaseScraper):
     default_currency = "$"
 
     def _get_tld(self, hostname):
-        clean_host = (hostname or "").lower()
-        if "amazon." in clean_host:
-            parts = clean_host.split("amazon.", 1)
-            if len(parts) > 1 and parts[1]:
-                return parts[1]
-        return "com"
+        match = AMAZON_HOST_RE.match((hostname or "").lower())
+        return match.group(1).lower() if match else "com"
+
+    def currency_for_url(self, url):
+        """amazon.in -> ₹, amazon.co.uk -> £, amazon.com -> $ ..."""
+        host = urlparse(str(url)).hostname or ""
+        return DOMAIN_DEFAULT_CURRENCIES.get(self._get_tld(host), self.default_currency)
 
     def get_headers(self, url):
         headers = super().get_headers(url)
