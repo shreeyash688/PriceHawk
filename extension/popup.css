@@ -94,4 +94,13 @@ h1{font-size:18px;font-weight:700}
 .items{list-style:none;padding:0;display:flex;flex-direction:column;gap:12px}
 .item .now{color:var(--foreground)}
 .item[data-hit] .now{color:var(--warn)}
+.card-footer{display:flex;gap:6px;flex-wrap:wrap}
+.header-actions{display:flex;gap:6px;align-items:center}
+.product-link{color:var(--muted-foreground);text-decoration:none;font-size:12px}
+.product-link:hover{color:var(--foreground);text-decoration:underline}
+.history-panel{background:var(--muted);padding:10px 12px;border-radius:calc(var(--radius) - 2px);font-size:12px;margin-top:8px}
+.history-list{max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:0;list-style:none}
+.history-row{display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px solid rgba(156,153,184,.1)}
+.edit-target-form{display:flex;gap:6px;align-items:center;margin-top:6px}
+.btn-inline-edit{height:22px;padding:0 6px;font-size:11px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:2s!important}}

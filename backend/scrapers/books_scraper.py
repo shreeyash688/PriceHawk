@@ -13,10 +13,13 @@ PRODUCT_PATH = re.compile(r"^/(catalogue/)?[a-z0-9\-]+_\d+/index\.html$")
 
 
 class BooksScraper(BaseScraper):
+    retailer_name = "Books to Scrape"
+    default_currency = "£"
 
     def can_handle(self, url):
         try:
-            return urlparse(str(url)).hostname == ALLOWED_HOST
+            parts = urlparse(str(url))
+            return parts.scheme in ("http", "https") and parts.hostname == ALLOWED_HOST
         except ValueError:
             return False
 
@@ -31,7 +34,7 @@ class BooksScraper(BaseScraper):
         if parts.scheme not in ("http", "https"):
             raise UnsupportedURLError("The URL must start with http:// or https://")
         if parts.hostname != ALLOWED_HOST or port is not None or parts.username or parts.password:
-            raise UnsupportedURLError("Only books.toscrape.com is supported right now")
+            raise UnsupportedURLError("That is not a valid books.toscrape.com URL")
         if not PRODUCT_PATH.match(parts.path):
             raise UnsupportedURLError("That is not a book product page")
 
@@ -46,7 +49,5 @@ class BooksScraper(BaseScraper):
         if title_tag is None or price_tag is None:
             raise PriceNotFoundError("Could not find the title or price on this page")
 
-        match = re.search(r"\d+(?:\.\d+)?", price_tag.get_text())  # "£51.77" -> "51.77"
-        if match is None:
-            raise PriceNotFoundError("The price on this page is not a number")
-        return title_tag.get_text(strip=True), float(match.group())
+        price = self.extract_numeric_price(price_tag.get_text())
+        return title_tag.get_text(strip=True), price

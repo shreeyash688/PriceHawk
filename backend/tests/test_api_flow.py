@@ -128,6 +128,17 @@ class ApiFlowTests(DatabaseTestCase):
         self.client.post(f"/api/products/{product_id}/check")
         self.assertTrue(self.client.get(f"/api/products/{product_id}").get_json()["alert_sent"])
 
+    def test_check_now_succeeds_even_when_smtp_fails(self):
+        product_id = self.track(target=25).get_json()["id"]
+        self.scraper.price = 10.0
+        self.send_email.return_value = False
+        response = self.client.post(f"/api/products/{product_id}/check")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["current_price"], 10.0)
+        history = self.client.get(f"/api/products/{product_id}/history").get_json()["history"]
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[-1]["price"], 10.0)
+
     # ----- history, update, delete, background -----
     def test_history_and_update_and_delete(self):
         product_id = self.track().get_json()["id"]
@@ -186,7 +197,9 @@ class ApiFlowTests(DatabaseTestCase):
         other_persons_csv = self.client.get("/api/export/products.csv?email=b@x.com").get_data(as_text=True)
         self.assertEqual(len(other_persons_csv.strip().splitlines()), 1)  # header only: not their products
         self.assertEqual(len(products_csv.strip().splitlines()), 2)
-        self.assertEqual(len(history_csv.strip().splitlines()), 2)
+        history_lines = history_csv.strip().splitlines()
+        self.assertEqual(len(history_lines), 2)
+        self.assertIn("20", history_lines[1])
         self.assertEqual(self.client.get("/api/export/history.csv?email=a@x.com&product_id=999").status_code, 404)
 
     def test_cors_only_for_extensions(self):
@@ -194,3 +207,36 @@ class ApiFlowTests(DatabaseTestCase):
         website = self.client.get("/api/health", headers={"Origin": "https://evil.com"})
         self.assertEqual(extension.headers.get("Access-Control-Allow-Origin"), "chrome-extension://abc")
         self.assertIsNone(website.headers.get("Access-Control-Allow-Origin"))
+
+    def test_readd_product_after_deletion(self):
+        # 1. Track product
+        first = self.track(BOOK_URL, target=15, email="a@x.com").get_json()
+        first_id = first["id"]
+        self.assertEqual(first["current_price"], 20.0)
+
+        # 2. Delete product
+        del_res = self.client.delete(f"/api/products/{first_id}")
+        self.assertEqual(del_res.status_code, 200)
+        self.assertEqual(self.client.get(f"/api/products/{first_id}").status_code, 404)
+
+        # 3. Re-track same product with fresh price
+        self.scraper.price = 25.0
+        second = self.track(BOOK_URL, target=15, email="a@x.com").get_json()
+        self.assertNotEqual(second["id"], first_id)
+        self.assertEqual(second["current_price"], 25.0)
+
+        # List shows only the fresh product
+        products = self.client.get("/api/products?email=a@x.com").get_json()["products"]
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0]["id"], second["id"])
+        self.assertEqual(products[0]["current_price"], 25.0)
+
+    def test_pause_and_resume_tracking(self):
+        product_id = self.track().get_json()["id"]
+        # Pause
+        paused = self.client.put(f"/api/products/{product_id}", json={"tracking_active": False}).get_json()
+        self.assertFalse(paused["tracking_active"])
+        # Resume
+        resumed = self.client.put(f"/api/products/{product_id}", json={"tracking_active": True}).get_json()
+        self.assertTrue(resumed["tracking_active"])
+

@@ -1,70 +1,295 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PriceHawk</title>
-<link rel="stylesheet" href="popup.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PriceHawk</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
+
 <body>
-<main class="shell">
-  <header class="top">
-    <div class="brand">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M2 8l9 3 5-6 5 6 9-3-5 9-4 1-5 9-5-9-4-1z" fill="#FFB800"/></svg>
-      <div><h1>PriceHawk</h1><p>Track prices. Catch deals.</p></div>
-    </div>
-    <button class="btn" data-variant="outline" data-size="icon" id="exportBtn" title="Export to CSV" aria-label="Export to CSV">
-      <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-  </header>
+  <main class="shell">
 
-  <div class="tabs-list" role="tablist">
-    <button class="tabs-trigger" data-view="track" data-state="active" role="tab">Track</button>
-    <button class="tabs-trigger" data-view="list" data-state="inactive" role="tab">Tracked <span id="count" class="badge" data-variant="default">0</span></button>
-  </div>
+    <!-- Header -->
+    <header class="top">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+          <path
+            d="M2 8l9 3 5-6 5 6 9-3-5 9-4 1-5 9-5-9-4-1z"
+            fill="#FFB800"
+          />
+        </svg>
 
-  <section id="view-track" class="view">
-    <div class="card">
-      <div class="card-header">
         <div>
-          <div class="card-title" id="pTitle">No product detected</div>
-          <p class="card-description">Works on Books to Scrape product pages.</p>
+          <h1>PriceHawk</h1>
+          <p>Track prices. Catch deals.</p>
         </div>
-        <span class="badge" id="detectStatus"><span class="dot"></span><span id="detectText">Looking…</span></span>
       </div>
-      <hr class="sep">
-      <div class="row">
-        <div><span class="muted">Current price</span><span id="pPrice" class="price">—</span></div>
-        <div style="flex:1;max-width:140px"><span class="muted" id="gaugeText">Set a target</span><div class="progress"><i id="gaugeFill"></i></div></div>
+
+      <div class="header-actions">
+        <button
+          class="btn"
+          data-variant="outline"
+          data-size="icon"
+          id="exportBtn"
+          title="Export tracked products to CSV"
+          aria-label="Export tracked products to CSV"
+          type="button"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 3v12m0 0l-4-4m4 4l4-4M5 20h14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+
+        <button
+          class="btn"
+          data-variant="outline"
+          data-size="icon"
+          id="exportHistoryBtn"
+          title="Export price history to CSV"
+          aria-label="Export price history to CSV"
+          type="button"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
       </div>
-      <p class="muted truncate" id="pUrl"></p>
+    </header>
+
+    <!-- Navigation -->
+    <div class="tabs-list" role="tablist" aria-label="PriceHawk views">
+      <button
+        class="tabs-trigger"
+        data-view="track"
+        data-state="active"
+        role="tab"
+        aria-selected="true"
+        type="button"
+      >
+        Track
+      </button>
+
+      <button
+        class="tabs-trigger"
+        data-view="list"
+        data-state="inactive"
+        role="tab"
+        aria-selected="false"
+        type="button"
+      >
+        Tracked
+        <span id="count" class="badge" data-variant="default">0</span>
+      </button>
     </div>
 
-    <div class="field-group">
-      <div class="field">
-        <label class="field-label" for="target">Target price</label>
-        <div class="input-group"><span class="input-addon">£</span><input id="target" type="number" min="0.01" step="0.01" placeholder="25.00" inputmode="decimal"></div>
-      </div>
-      <button class="btn" data-variant="link" id="manualToggle" type="button" style="align-self:flex-start">Enter a product link instead</button>
-      <div class="field hidden" id="manualField">
-        <label class="field-label" for="manualUrl">Product link</label>
-        <div class="input-group"><input id="manualUrl" type="url" placeholder="https://books.toscrape.com/catalogue/…"></div>
-      </div>
-    </div>
+    <!-- Track Product View -->
+    <section id="view-track" class="view">
 
-    <button class="btn" data-size="lg" id="trackBtn"><span class="spinner hidden" id="trackSpin"></span>Track price</button>
-    <div class="alert hidden" id="alert" role="status" aria-live="polite"><span id="alertText"></span></div>
-  </section>
+      <!-- Detected Product -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title" id="pTitle">
+              No product detected
+            </div>
 
-  <section id="view-list" class="view hidden">
-    <ul id="items" class="items"></ul>
-    <div class="empty hidden" id="empty">
-      <div class="empty-title">Nothing tracked yet</div>
-      <p class="empty-desc">Track a product and it will show up here.</p>
-      <button class="btn" data-variant="outline" data-size="sm" data-view="track">Track a product</button>
-    </div>
-  </section>
-</main>
-<script src="popup.js"></script>
+            <p class="card-description">
+              Works on Books to Scrape product pages.
+            </p>
+          </div>
+
+          <span
+            class="badge"
+            id="detectStatus"
+            data-state="loading"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="dot"></span>
+            <span id="detectText">Looking...</span>
+          </span>
+        </div>
+
+        <hr class="sep">
+
+        <div class="row">
+          <div>
+            <span class="muted">Current price</span>
+            <span id="pPrice" class="price">—</span>
+          </div>
+
+          <div style="flex: 1; max-width: 140px">
+            <span class="muted" id="gaugeText">Set a target</span>
+
+            <div class="progress">
+              <i id="gaugeFill"></i>
+            </div>
+          </div>
+        </div>
+
+        <p class="muted truncate" id="pUrl"></p>
+      </div>
+
+      <!-- Input Fields -->
+      <div class="field-group">
+
+        <!-- Target Price -->
+        <div class="field">
+          <label class="field-label" for="target">
+            Target price
+          </label>
+
+          <div class="input-group">
+            <span class="input-addon" id="targetCurrencyAddon">£</span>
+
+            <input
+              id="target"
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="25.00"
+              inputmode="decimal"
+              required
+            >
+          </div>
+        </div>
+
+        <!-- Notification Email -->
+        <div class="field">
+          <label class="field-label" for="email">
+            Notification email
+          </label>
+
+          <div class="input-group">
+            <input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              autocomplete="email"
+              required
+            >
+          </div>
+        </div>
+
+        <!-- Manual Product URL Toggle -->
+        <button
+          class="btn"
+          data-variant="link"
+          id="manualToggle"
+          type="button"
+          style="align-self: flex-start"
+          aria-expanded="false"
+          aria-controls="manualField"
+        >
+          Enter a product link instead
+        </button>
+
+        <!-- Manual Product URL -->
+        <div class="field hidden" id="manualField">
+          <label class="field-label" for="manualUrl">
+            Product link
+          </label>
+
+          <div class="input-group">
+            <input
+              id="manualUrl"
+              type="url"
+              placeholder="https://books.toscrape.com/catalogue/..."
+            >
+            <button
+              id="previewBtn"
+              class="btn"
+              data-variant="ghost"
+              data-size="sm"
+              type="button"
+              style="margin-right: 4px; height: 32px;"
+            >
+              Preview
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Track Button -->
+      <button
+        class="btn"
+        data-size="lg"
+        id="trackBtn"
+        type="button"
+      >
+        <span class="spinner hidden" id="trackSpin"></span>
+        <span id="trackBtnText">Start Tracking</span>
+      </button>
+
+      <!-- Notifications -->
+      <div
+        class="alert hidden"
+        id="alert"
+        role="status"
+        aria-live="polite"
+      >
+        <span id="alertText"></span>
+      </div>
+
+    </section>
+
+    <!-- Tracked Products View -->
+    <section id="view-list" class="view hidden">
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Tracked Products</div>
+
+            <p class="card-description">
+              Monitor your products and target prices.
+            </p>
+          </div>
+
+          <button
+            class="btn"
+            data-variant="outline"
+            data-size="sm"
+            id="refreshListBtn"
+            title="Refresh tracked products"
+            type="button"
+          >
+            Refresh
+          </button>
+        </div>
+
+        <ul id="items" class="items"></ul>
+
+        <div id="empty" class="empty hidden">
+          <div class="empty-title">Nothing tracked yet</div>
+
+          <p class="empty-desc">
+            Track a product and it will appear here.
+          </p>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Load JavaScript once -->
+  <script src="popup.js"></script>
 </body>
 </html>

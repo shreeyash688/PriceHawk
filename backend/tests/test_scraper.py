@@ -36,7 +36,7 @@ class UrlValidationTests(unittest.TestCase):
 
     def test_registry_rejects_unsupported_site(self):
         with self.assertRaises(UnsupportedURLError):
-            get_scraper("https://amazon.in/dp/123")
+            get_scraper("https://walmart.com/ip/123")
 
 
 class ParsingTests(unittest.TestCase):

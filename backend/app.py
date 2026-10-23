@@ -47,7 +47,7 @@ def get_url_from_body(body):
     url = body.get("url")
     if not isinstance(url, str) or not url.strip():
         raise ValidationError("url is required")
-    return url
+    return url.strip()
 
 
 def csv_response(lines, filename):

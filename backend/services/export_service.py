@@ -34,4 +34,4 @@ def products_csv(email):
 def history_csv(email, product_id=None):
     yield _csv_line(HISTORY_COLUMNS)
     for row in db.iter_price_history(product_id, email):
-        yield _csv_line(list(row))
+        yield _csv_line([row.get(column) for column in HISTORY_COLUMNS])

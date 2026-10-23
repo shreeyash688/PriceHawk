@@ -1,13 +1,23 @@
-"""Picks the right scraper for a URL. To support a new website later,
-write a new scraper class and add it to SCRAPERS."""
 from exceptions import UnsupportedURLError
+from scrapers.amazon_scraper import AmazonScraper
 from scrapers.books_scraper import BooksScraper
+from scrapers.ebay_scraper import EbayScraper
+from scrapers.flipkart_scraper import FlipkartScraper
+from scrapers.myntra_scraper import MyntraScraper
 
-SCRAPERS = [BooksScraper()]
+SCRAPERS = [
+    BooksScraper(),
+    AmazonScraper(),
+    FlipkartScraper(),
+    EbayScraper(),
+    MyntraScraper(),
+]
 
 
 def get_scraper(url):
     for scraper in SCRAPERS:
         if scraper.can_handle(url):
             return scraper
-    raise UnsupportedURLError("Only books.toscrape.com product pages are supported right now")
+    raise UnsupportedURLError(
+        "Only supported retailers (Books to Scrape, Amazon, Flipkart, eBay, Myntra) are currently supported"
+    )
