@@ -14,7 +14,7 @@ import threading
 import config
 from database import db
 import currency as fx
-from exceptions import (DemoModeError, DuplicateProductError, PriceHawkError,
+from exceptions import (DemoModeError, DuplicateProductError, LimitReachedError, PriceHawkError,
                         ProductNotFoundError, ScraperError, ValidationError)
 from models.product import Product
 from scrapers import get_scraper
@@ -150,14 +150,16 @@ def preview_product(url, email=None, page=None):
 def track_product(url, target_price, email, page=None):
     target = _validate_price(target_price, "target_price")
     email = validate_email(email)
-    if db.count_products_for_email(email) >= config.MAX_PRODUCTS_PER_EMAIL:
-        raise ValidationError(
-            f"This email is already tracking {config.MAX_PRODUCTS_PER_EMAIL} products (the maximum)"
-        )
 
     data = _lookup(url, page)
+    # Duplicate first: "you already track this" is the more useful answer than "list is full".
     if db.get_product_by_url_and_email(data["url"], email) is not None:
-        raise DuplicateProductError("This email is already tracking this product")
+        raise DuplicateProductError("You're already tracking this product")
+    limit = config.MAX_PRODUCTS_PER_EMAIL
+    if db.count_products_for_email(email) >= limit:
+        raise LimitReachedError(
+            f"Your list is full ({limit} of {limit} products). Remove one in the Tracked tab to add this one."
+        )
 
     product_id = db.add_product(data["title"], data["url"], data["price"], target, email)
     logger.info("Now tracking product %s (%s) from %s data", product_id, data["title"], data["source"])

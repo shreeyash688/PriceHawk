@@ -24,9 +24,7 @@ def _raise_database_error(error):
     code = getattr(error, "code", None)
 
     if code == "23505" or "duplicate key" in message.lower():
-        raise DuplicateProductError(
-            "This email is already tracking this product"
-        ) from error
+        raise DuplicateProductError("You're already tracking this product") from error
 
     raise error
 

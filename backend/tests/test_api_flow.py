@@ -70,8 +70,17 @@ class ApiFlowTests(DatabaseTestCase):
     def test_limit_per_email(self):
         with patch.object(config, "MAX_PRODUCTS_PER_EMAIL", 1):
             self.assertEqual(self.track(BOOK_URL, email="a@x.com").status_code, 201)
-            self.assertEqual(self.track(BOOK_URL_2, email="a@x.com").status_code, 400)
+            full = self.track(BOOK_URL_2, email="a@x.com")
+            self.assertEqual(full.status_code, 400)
+            self.assertEqual(full.get_json()["code"], "limit_reached")
+            self.assertNotIn("already tracking", full.get_json()["error"])  # never looks like a duplicate
             self.assertEqual(self.track(BOOK_URL_2, email="b@x.com").status_code, 201)
+
+    def test_duplicate_wins_over_full_list(self):
+        with patch.object(config, "MAX_PRODUCTS_PER_EMAIL", 1):
+            self.track(BOOK_URL, email="a@x.com")
+            again = self.track(BOOK_URL, email="a@x.com")
+            self.assertEqual((again.status_code, again.get_json()["code"]), (409, "duplicate"))
 
     def test_alert_goes_to_the_owner_of_the_product(self):
         self.track(target=25, email="a@x.com")  # price 20 <= 25 -> alert

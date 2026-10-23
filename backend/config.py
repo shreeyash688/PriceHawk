@@ -37,7 +37,7 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 # --- Safety / demo ---
-MAX_PRODUCTS_PER_EMAIL = int(os.getenv("MAX_PRODUCTS_PER_EMAIL", "5"))  # stops one address being flooded
+MAX_PRODUCTS_PER_EMAIL = int(os.getenv("MAX_PRODUCTS_PER_EMAIL", "20"))  # stops one address being flooded
 DEMO_MODE = _get_bool("DEMO_MODE", False)
 EXTENSION_ID = os.getenv("EXTENSION_ID", "")
 

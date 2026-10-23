@@ -73,7 +73,7 @@ Optional: copy the extension ID into `EXTENSION_ID` in `.env` so only your exten
 | `extension/` | `manifest.json`, `popup.html/css/js`, icons |
 
 ## API (for the extension)
-All responses are JSON. Errors look like `{"error": "message"}` with status 400 (bad input), 404, 409 (already tracked), 502 (website problem).
+All responses are JSON. Errors look like `{"error": "message", "code": "duplicate" | "limit_reached" | "invalid" | ...}` with status 400 (bad input), 404, 409 (already tracked), 502 (website problem).
 
 | Method + URL | Body | What it does |
 |---|---|---|
@@ -114,7 +114,7 @@ The background monitor will later overwrite the fake price with the real one. Th
 ## Multiple people
 - Each product stores the email of the person who added it (`notify_email`); alerts go only there.
 - The same product can be tracked by different people; one person can't track it twice (`unique (url, notify_email)`).
-- Lists and CSV exports are filtered by email. One email can track at most `MAX_PRODUCTS_PER_EMAIL` products (default 5).
+- Lists and CSV exports are filtered by email. One email can track at most `MAX_PRODUCTS_PER_EMAIL` products (default 20; set it in `.env`).
 
 **Known limit (fine for a mini-project):** an email is an *address*, not a *login*. Someone who knows your
 email and a product id could view or change that product. Real accounts would fix this.

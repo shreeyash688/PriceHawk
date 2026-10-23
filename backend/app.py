@@ -30,7 +30,7 @@ def handle_errors(view):
         try:
             return view(*args, **kwargs)
         except PriceHawkError as error:  # our own errors know their status code
-            return jsonify({"error": str(error)}), error.status_code
+            return jsonify({"error": str(error), "code": error.code}), error.status_code
         except Exception:  # anything unexpected: log details, hide them from the user
             logger.exception("Unexpected error in %s", view.__name__)
             return jsonify({"error": "Internal server error"}), 500
@@ -83,7 +83,8 @@ def add_cors_headers(response):
 @app.route("/api/health")
 def health():
     return jsonify({"status": "ok", "demo_mode": config.DEMO_MODE,
-                    "currency": config.HOME_CURRENCY, "currency_symbol": currency.home_symbol()})
+                    "currency": config.HOME_CURRENCY, "currency_symbol": currency.home_symbol(),
+                    "max_products": config.MAX_PRODUCTS_PER_EMAIL})
 
 
 @app.route("/api/preview", methods=["POST"])

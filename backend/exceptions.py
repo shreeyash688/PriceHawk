@@ -8,11 +8,18 @@ layer can turn any of them into a proper JSON response automatically.
 class PriceHawkError(Exception):
     """Base class for all PriceHawk errors."""
     status_code = 500
+    code = "error"  # machine-readable, so the extension never has to guess from the wording
 
 
 class ValidationError(PriceHawkError):
     """The user sent something invalid (bad price, bad body...)."""
     status_code = 400
+    code = "invalid"
+
+
+class LimitReachedError(ValidationError):
+    """This email already tracks the maximum number of products."""
+    code = "limit_reached"
 
 
 class UnsupportedURLError(ValidationError):
@@ -25,6 +32,7 @@ class ProductNotFoundError(PriceHawkError):
 
 class DuplicateProductError(PriceHawkError):
     status_code = 409
+    code = "duplicate"
 
 
 class DemoModeError(PriceHawkError):

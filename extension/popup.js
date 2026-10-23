@@ -166,7 +166,10 @@ async function api(url, options = {}) {
   const isJson = (response.headers.get("content-type") || "").includes("application/json");
   const data = isJson ? await response.json().catch(() => ({})) : await response.text().catch(() => "");
   if (!response.ok) {
-    throw new Error((data && data.error) || `Request failed (${response.status})`);
+    const error = new Error((data && data.error) || `Request failed (${response.status})`);
+    error.status = response.status;
+    error.code = data && data.code; // "duplicate", "limit_reached", "invalid", ...
+    throw error;
   }
   return data;
 }
@@ -688,9 +691,11 @@ $("trackBtn").addEventListener("click", async () => {
       : `Tracking started. We'll email ${email} when it drops to ${money(target, currency)}.`, "ok");
     refreshCount();
   } catch (error) {
-    if (/already tracking/i.test(error.message)) {
+    if (error.code === "duplicate" || error.status === 409) {
       setDetectStatus("Already tracked", "amber");
       say("You're already tracking this product. Change its target in the Tracked tab.", "info");
+    } else if (error.code === "limit_reached") {
+      say(error.message, "err");
     } else {
       say(looksBlocked(error.message)
         ? "The store blocked the server. Open the product page in this tab and click PriceHawk there to track it."
