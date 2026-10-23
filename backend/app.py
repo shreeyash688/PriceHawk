@@ -82,7 +82,7 @@ def add_cors_headers(response):
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "demo_mode": config.DEMO_MODE,
+    return jsonify({"status": "ok", "version": config.VERSION, "demo_mode": config.DEMO_MODE,
                     "currency": config.HOME_CURRENCY, "currency_symbol": currency.home_symbol(),
                     "max_products": config.MAX_PRODUCTS_PER_EMAIL})
 
@@ -194,6 +194,8 @@ def setup_logging():
 
 if __name__ == "__main__":
     setup_logging()
+    logger.info("PriceHawk backend v%s starting: prices in %s (%s), checks every %ss",
+                config.VERSION, config.HOME_CURRENCY, currency.home_symbol(), config.CHECK_INTERVAL_SECONDS)
     db.init_db()
     start_monitor(config.CHECK_INTERVAL_SECONDS)
     # use_reloader=False: the auto-reloader would run this file twice => two monitor threads.

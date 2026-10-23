@@ -8,6 +8,7 @@ Rules for sending alerts (so the user is never spammed):
 """
 import logging
 import math
+from datetime import datetime, timedelta, timezone
 import re
 import threading
 
@@ -240,10 +241,32 @@ def check_product(product_id):
     return _record_price(product_id, data["price"])
 
 
+BLOCKED_WORDS = ("anti-bot", "captcha", "verification", "access restriction")
+
+
+def _recently_blocked(product, now=None):
+    """True if the store blocked our last check less than BLOCKED_RETRY_MINUTES ago.
+
+    Retrying a blocked store every minute only makes the block last longer, so we back off.
+    The extension can still update the price through the user's browser meanwhile.
+    """
+    if not product.last_error or not any(w in product.last_error.lower() for w in BLOCKED_WORDS):
+        return False
+    try:
+        checked = datetime.fromisoformat(str(product.last_checked_at).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if checked.tzinfo is None:
+        checked = checked.replace(tzinfo=timezone.utc)
+    now = now or datetime.now(timezone.utc)
+    return now - checked < timedelta(minutes=config.BLOCKED_RETRY_MINUTES)
+
+
 def check_all_products():
     """Check every ACTIVE product. One failing product never stops the others."""
     products = map(Product.from_row, db.get_all_products())
-    active_products = filter(lambda product: product.tracking_active, products)  # skip paused ones
+    # skip paused products, and give stores that just blocked us a break
+    active_products = filter(lambda product: product.tracking_active and not _recently_blocked(product), products)
 
     checked = 0
     for product in active_products:

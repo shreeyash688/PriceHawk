@@ -319,3 +319,19 @@ class ApiFlowTests(DatabaseTestCase):
     def test_health_reports_currency(self):
         body = self.client.get("/api/health").get_json()
         self.assertEqual((body["currency"], body["currency_symbol"]), ("INR", "₹"))
+        self.assertEqual(body["version"], config.VERSION)
+
+    def test_monitor_backs_off_after_a_captcha(self):
+        from exceptions import ScraperError
+        from services import tracker_service
+        product_id = self.track().get_json()["id"]
+        self.scraper.scrape = lambda url: (_ for _ in ()).throw(ScraperError("Amazon anti-bot verification or CAPTCHA detected."))
+        self.assertEqual(tracker_service.check_all_products(), 0)  # blocked -> error recorded
+        calls = []
+        self.scraper.scrape = lambda url: calls.append(url) or {"url": url, "title": "t", "price": 5}
+        tracker_service.check_all_products()
+        self.assertEqual(calls, [])  # within BLOCKED_RETRY_MINUTES: not retried
+        with patch.object(config, "BLOCKED_RETRY_MINUTES", 0):
+            tracker_service.check_all_products()
+        self.assertEqual(len(calls), 1)  # after the pause it is checked again
+        self.assertIsNone(self.client.get(f"/api/products/{product_id}").get_json()["last_error"])

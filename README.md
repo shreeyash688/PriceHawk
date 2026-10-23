@@ -11,7 +11,15 @@ Stores that answer in another currency (e.g. Amazon.com in USD) are converted wi
 (cached 6 h, built-in approximate rates if offline). The popup shows the original, e.g. "converted from $539.99".
 
 ### When a store blocks the server (Amazon CAPTCHA)
-Amazon often blocks requests from the Python backend. PriceHawk works around it with the user's own browser:
+**Why it happens:** Amazon runs bot detection. The backend is a Python script that requests the same pages
+from the same IP every few minutes, without cookies, JavaScript or a real browser's network fingerprint, so
+Amazon answers with a "robot check" page instead of the product. This can't be reliably "fixed" from the
+server (scraping is also against Amazon's terms); the robust options are fewer server requests
+(`CHECK_INTERVAL_SECONDS`, `BLOCKED_RETRY_MINUTES`), the user's browser (below), or Amazon's official
+Product Advertising API for a production app.
+
+PriceHawk works around it with the user's own browser, and the monitor backs off for
+`BLOCKED_RETRY_MINUTES` after a block instead of retrying every round:
 - **Tracking:** the popup reads the title and price from the open page and sends them with the link,
   so the backend doesn't need to scrape at all (the link is still validated).
 - **Check now:** if the server is blocked, the popup reads the page through the browser (a quick fetch,
@@ -26,6 +34,9 @@ Alerts work exactly the same whichever way the price arrives.
 3. Dashboard → Project Settings → API: copy the **Project URL** and the **secret / service_role key**.
 
 ## 2. Backend setup
+> Updating? Stop the old server first (Ctrl+C in its terminal). The popup warns "Server out of date"
+> if it is talking to an older backend; an old backend is what sends £ emails.
+
 ```bash
 cd backend
 python -m venv venv

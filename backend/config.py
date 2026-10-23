@@ -15,6 +15,9 @@ def _get_bool(name, default=False):
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes")
 
 
+# Bumped whenever the API changes; the extension warns if it talks to an older backend.
+VERSION = "0.4.0"
+
 # --- Server ---
 HOST = "127.0.0.1"  # only this computer can reach the API
 PORT = int(os.getenv("PORT", "5000"))
@@ -25,6 +28,8 @@ LOG_FILE = os.getenv("LOG_FILE", os.path.join(BASE_DIR, "pricehawk.log"))
 # --- Scraping / monitoring ---
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))  # seconds
 CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "60"))
+# After a store blocks us (CAPTCHA), leave that product alone for this long instead of retrying every round.
+BLOCKED_RETRY_MINUTES = int(os.getenv("BLOCKED_RETRY_MINUTES", "30"))
 
 # --- Currency: every price is stored, shown and emailed in this currency ---
 HOME_CURRENCY = os.getenv("HOME_CURRENCY", "INR").strip().upper() or "INR"

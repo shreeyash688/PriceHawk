@@ -71,6 +71,9 @@ let submitting = false;
 let sortMode = readStored("pricehawk_sort") || "newest";
 let toastTimer = null;
 let homeSymbol = "₹"; // every price is shown in the backend's home currency (INR by default)
+let maxProducts = null; // per-email limit reported by the backend
+let trackedCount = 0;
+const REQUIRED_BACKEND = "0.4.0"; // older servers send £ emails and lack newer endpoints
 
 function readStored(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -174,6 +177,60 @@ async function api(url, options = {}) {
   return data;
 }
 
+/** "0.3.1" < "0.4.0" ? (missing version = very old server) */
+function isOlderVersion(version, required) {
+  if (!version) return true;
+  const a = String(version).split(".").map(Number);
+  const b = required.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) < (b[i] || 0);
+  }
+  return false;
+}
+
+// =====================================================
+// POP-UP DIALOG
+// =====================================================
+
+function showModal({ title, text, code, tone = "amber", primary, secondary }) {
+  $("modalTitle").textContent = title;
+  $("modalText").textContent = text;
+  $("modalCode").textContent = code || "";
+  $("modalCode").classList.toggle("hidden", !code);
+  document.querySelector(".modal-card").dataset.tone = tone;
+  const close = () => $("modal").classList.add("hidden");
+  const wire = (button, config, fallbackLabel) => {
+    button.textContent = config?.label || fallbackLabel;
+    button.onclick = () => { close(); config?.action?.(); };
+  };
+  wire($("modalPrimary"), primary, "OK");
+  $("modalSecondary").classList.toggle("hidden", !secondary);
+  if (secondary) wire($("modalSecondary"), secondary, "Close");
+  $("modal").classList.remove("hidden");
+  $("modalPrimary").focus();
+}
+$("modal").addEventListener("click", (event) => { if (event.target === $("modal")) $("modal").classList.add("hidden"); });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") $("modal").classList.add("hidden"); });
+
+function showListFull() {
+  showModal({
+    title: "Your tracking list is full",
+    text: `You're already tracking ${maxProducts || trackedCount} of ${maxProducts || trackedCount} products with ${getEmail()}. ` +
+      "Remove a product you no longer need, then track this one.",
+    primary: { label: "Manage tracked products", action: () => show("list") },
+    secondary: { label: "Close" }
+  });
+}
+
+/** Tracked-tab badge: "3", or "20/20" in red when the list is full. */
+function setCount(n) {
+  trackedCount = n;
+  const full = Boolean(maxProducts) && n >= maxProducts;
+  $("count").textContent = full ? `${n}/${maxProducts}` : String(n);
+  $("count").toggleAttribute("data-full", full);
+  $("count").title = maxProducts ? `${n} of ${maxProducts} products tracked` : "";
+}
+
 function setConnection(ok) {
   $("conn").dataset.state = ok ? "ok" : "err";
   $("connText").textContent = ok ? (demoMode ? "Connected · demo mode" : "Connected") : "Backend offline";
@@ -184,8 +241,21 @@ async function checkBackend() {
     const data = await api(API.health);
     demoMode = Boolean(data.demo_mode);
     homeSymbol = data.currency_symbol || homeSymbol;
+    maxProducts = Number(data.max_products) || null;
     $("targetCurrencyAddon").textContent = homeSymbol;
     setConnection(true);
+    if (isOlderVersion(data.version, REQUIRED_BACKEND)) {
+      $("conn").dataset.state = "err";
+      $("connText").textContent = "Server out of date";
+      showModal({
+        tone: "red",
+        title: "Your PriceHawk server is an old version",
+        text: `The server running on port 5000 is version ${data.version || "0.3 or older"}, but this extension needs ${REQUIRED_BACKEND}. ` +
+          "That's why alert emails still show £. Stop the old server (Ctrl+C in its terminal, or close that window) and start the new one:",
+        code: "cd PriceHawk-main/backend\npython app.py",
+        primary: { label: "Got it" }
+      });
+    }
     return true;
   } catch (error) {
     say(error.message, "err");
@@ -531,6 +601,7 @@ async function reportTrackedPrice(url, page) {
       method: "POST",
       body: JSON.stringify({ url, email: getEmail(), page })
     });
+    if (detected) detected.tracked = true;
     setDetectStatus(product.alert_sent ? "Target reached" : "Tracking", "green");
   } catch { /* not tracked by this email: nothing to do */ }
 }
@@ -676,6 +747,11 @@ $("trackBtn").addEventListener("click", async () => {
     return;
   }
 
+  if (maxProducts && trackedCount >= maxProducts && !detected?.tracked) {
+    showListFull();
+    return;
+  }
+
   submitting = true;
   setTrackLoading(true);
   try {
@@ -695,7 +771,8 @@ $("trackBtn").addEventListener("click", async () => {
       setDetectStatus("Already tracked", "amber");
       say("You're already tracking this product. Change its target in the Tracked tab.", "info");
     } else if (error.code === "limit_reached") {
-      say(error.message, "err");
+      refreshCount();
+      showListFull();
     } else {
       say(looksBlocked(error.message)
         ? "The store blocked the server. Open the product page in this tab and click PriceHawk there to track it."
@@ -722,7 +799,7 @@ async function loadList() {
   const requestId = ++listRequestId;
   const email = getEmail();
   if (!isValidEmail(email)) {
-    $("count").textContent = "0";
+    setCount(0);
     setEmptyState("Add your email first", "Enter your alert email on the Track tab to see your products.");
     return;
   }
@@ -730,7 +807,7 @@ async function loadList() {
     const data = await api(API.list(email, sortMode));
     if (requestId !== listRequestId) return; // a newer request already answered
     const products = Array.isArray(data.products) ? data.products : [];
-    $("count").textContent = String(products.length);
+    setCount(products.length);
     if (products.length === 0) {
       setEmptyState("Nothing tracked yet", "Track a product and it will show up here.");
       return;
@@ -769,12 +846,12 @@ async function refreshBlockedInBrowser(products, requestId) {
 
 async function refreshCount() {
   if (!isValidEmail()) {
-    $("count").textContent = "0";
+    setCount(0);
     return;
   }
   try {
     const data = await api(API.list(getEmail()));
-    $("count").textContent = String((data.products || []).length);
+    setCount((data.products || []).length);
   } catch { /* the header already shows the backend is offline */ }
 }
 
@@ -810,7 +887,7 @@ function statusOf(p) {
   const hit = Number(p.current_price) <= Number(p.target_price);
   if (!p.tracking_active) return { key: "paused", label: "Paused", tone: "muted" };
   if (hit) return { key: "hit", label: p.alert_sent ? "Alert sent" : "Target reached", tone: "green" };
-  if (p.last_error) return { key: "error", label: "Check failed", tone: "red" };
+  if (p.last_error && !looksBlocked(p.last_error)) return { key: "error", label: "Check failed", tone: "red" };
   return { key: "watching", label: "Watching", tone: "amber" };
 }
 
@@ -885,10 +962,12 @@ function createCard(product) {
         : `${money(now - target, currency)} to go`;
     q(".checked").textContent = timeAgo(product.last_checked_at);
 
+    const blockedNote = looksBlocked(product.last_error);
     q(".item-error").textContent = !product.last_error ? ""
-      : looksBlocked(product.last_error)
-        ? `${store?.name || "The store"} blocked the last server check. Press Check now to read the price through your browser.`
+      : blockedNote
+        ? `${store?.name || "The store"} is blocking server checks for now. The price updates through your browser when you open PriceHawk or press Check now.`
         : `Last check failed: ${product.last_error}`;
+    q(".item-error").classList.toggle("soft", blockedNote);
     q(".item-error").classList.toggle("hidden", !product.last_error);
 
     q('[data-a="pause"]').innerHTML = product.tracking_active
@@ -1044,7 +1123,7 @@ function createCard(product) {
       await api(API.product(product.id), { method: "DELETE" });
       item.remove();
       const left = document.querySelectorAll("#items .item").length;
-      $("count").textContent = String(left);
+      setCount(left);
       if (left === 0) setEmptyState("Nothing tracked yet", "Track a product and it will show up here.");
       say("Removed from tracking.", "ok");
     } catch (error) {

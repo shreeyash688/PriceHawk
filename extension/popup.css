@@ -217,6 +217,18 @@ h1 { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 .empty-title { font-weight: 600; }
 .empty-desc { color: var(--text-2); font-size: 12.5px; }
 
+/* ---------- Pop-up dialog ---------- */
+.modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(5, 4, 8, .72); backdrop-filter: blur(3px); animation: fade .15s ease; }
+.modal-card { width: 100%; display: flex; flex-direction: column; gap: 10px; padding: 20px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: 0 20px 50px rgba(0, 0, 0, .6); animation: rise .2s ease; }
+.modal-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-weight: 800; font-size: 18px; background: var(--amber-soft); color: var(--amber); }
+.modal-card[data-tone=red] .modal-icon { background: var(--red-soft); color: var(--red); }
+.modal-card h2 { font-size: 16px; font-weight: 700; }
+.modal-card p { color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.modal-code { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--bg); color: var(--text); font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.count[data-full] { background: var(--red); color: #2a0606; }
+.item-error.soft { background: var(--surface-2); color: var(--text-2); }
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; left: 16px; right: 16px; bottom: 12px; z-index: 10;
@@ -235,5 +247,6 @@ h1 { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 
 @keyframes spin { to { transform: rotate(1turn); } }
 @keyframes pulse { 50% { opacity: .3; } }
+@keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
